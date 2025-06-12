@@ -32,7 +32,6 @@ dist/
 .eggs/
 
 # Images and media
-images/sample.png
 *.png
 *.svg
 
