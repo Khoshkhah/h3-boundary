@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Jupyter and IPython
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs and local data
+*.log
+*.csv
+*.json
+*.sqlite
+*.db
+
+# OS and editor-specific
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python environment & build
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Images and media
+images/sample.jpg
+*.png
+*.svg
+
+# User-generated data or intermediate files
+*.out
+*.cache
+*.bak
+
+# Pytest or coverage
+.cache/
+coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# Git-specific
+*.orig
