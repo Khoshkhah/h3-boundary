@@ -31,10 +31,6 @@ build/
 dist/
 .eggs/
 
-# Images and media
-*.png
-*.svg
-
 # User-generated data or intermediate files
 *.out
 *.cache
