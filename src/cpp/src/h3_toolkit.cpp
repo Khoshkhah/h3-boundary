@@ -1,22 +1,18 @@
 /**
  * @file h3_toolkit.cpp
- * @brief H3-Toolkit: High-performance H3 cell boundary tracing and polygon operations
- * 
- * This library provides efficient algorithms for:
- * - Tracing H3 cell boundaries across resolution hierarchies
- * - Computing boundary children at arbitrary resolutions
- * - Generating buffered polygons guaranteed to contain all res-15 children
- * - Polygon union and convex hull operations using Boost.Geometry
- * 
- * Key Functions:
- * - trace_cell_to_ancestor_faces: Track which parent faces a cell touches
- * - children_on_boundary_faces: Get all boundary children at a target resolution
- * - cell_boundary_from_children: Merge boundary children into a single polygon
- * - get_buffered_boundary_polygon: Create buffered polygon with configurable accuracy
- * 
- * Performance: C++ implementation provides 10-30x speedup over pure Python.
- * 
- * @author H3-Toolkit Contributors
+ * @brief C++ core of h3-boundary: H3 cell boundary tracing and polygon operations.
+ *
+ * Implements the API declared in h3_toolkit.hpp (full parameter docs live
+ * there):
+ * - Face tracing up the hierarchy and boundary-children enumeration down it,
+ *   driven by flat constexpr face-mapping tables.
+ * - Boundary polygons (Boost.Geometry union of boundary cells) and buffered
+ *   polygons (convex hull or union, then buffer).
+ *
+ * The pure-Python reference implementation lives in
+ * src/python/h3_boundary/{utils.py,geom.py}; tests/python/test_parity.py
+ * keeps the two backends in lockstep.
+ *
  * @license MIT
  */
 
@@ -89,6 +85,8 @@ static inline std::set<int> mask_to_faces(uint8_t m) {
     return s;
 }
 
+/// Traces which of the ancestor's faces (at res_parent) the cell h lies on,
+/// walking up one level at a time through the forward face tables.
 std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input_faces, int res_parent) {
     int h_res = getResolution(h);
     
@@ -150,11 +148,14 @@ std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input
     return mask_to_faces(faces);
 }
 
+/// Convenience overload of trace_cell_to_ancestor_faces for the immediate parent.
 std::set<int> trace_cell_to_parent_faces(H3Index h, const std::set<int>& input_faces) {
     int res = getResolution(h);
     return trace_cell_to_ancestor_faces(h, input_faces, res - 1);
 }
 
+/// Walks up the hierarchy while the cell keeps tracing to at least one of the
+/// requested faces; returns the last ancestor for which that held.
 H3Index cell_to_coarsest_ancestor_on_faces(H3Index h, const std::set<int>& input_faces) {
     int res = getResolution(h);
     H3Index current_h = h;
@@ -219,6 +220,9 @@ static void collect_boundary_children(H3Index current, int res, uint8_t faces,
     }
 }
 
+/// Enumerates all descendants of parent at target_res lying on the given
+/// parent faces. Only the boundary subtree is visited, so cost scales with
+/// the boundary length, not the parent's interior.
 std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, const std::set<int>& input_faces) {
     int res_parent = getResolution(parent);
     if (target_res < res_parent) {
@@ -316,6 +320,7 @@ static multi_polygon_type union_cells(const std::vector<H3Index>& cells,
     return parts.empty() ? multi_polygon_type{} : std::move(parts.front());
 }
 
+/// Returns the cell's own boundary as a closed (lon, lat) ring in degrees.
 std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
     CellBoundary cb;
     cellToBoundary(cell, &cb);
@@ -331,6 +336,7 @@ std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
     return result;
 }
 
+/// Unions the given cells and returns the exterior ring of the largest piece.
 std::vector<std::pair<double, double>> merged_boundary_of_cells(const std::vector<H3Index>& cells) {
     if (cells.empty()) {
         return {};
@@ -340,6 +346,8 @@ std::vector<std::pair<double, double>> merged_boundary_of_cells(const std::vecto
     return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
 }
 
+/// Boundary polygon of parent computed as the union of its boundary children
+/// at target_res; falls back to the parent's own boundary if there are none.
 std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index parent, int target_res) {
     std::set<int> all_faces = {1, 2, 3, 4, 5, 6};
     auto boundary_children = children_on_boundary_faces(parent, target_res, all_faces);
@@ -350,6 +358,8 @@ std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index paren
     return merged_boundary_of_cells(boundary_children);
 }
 
+/// Buffers the cell's own boundary. buffer_meters < 0 auto-calculates as
+/// 100% of the edge length four resolutions finer (capped at 15).
 std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, double buffer_meters) {
     // Get cell boundary
     CellBoundary cb;
@@ -406,6 +416,9 @@ std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, dou
     return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
 }
 
+/// Buffered polygon guaranteed to contain the cell's fine-resolution children:
+/// boundary at intermediate_res (convex hull = fast, union = accurate), then
+/// buffered by buffer_meters (< 0 = 100% of the intermediate edge length).
 std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     H3Index cell,
     int intermediate_res,

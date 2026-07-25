@@ -4,9 +4,9 @@ title: Home
 nav_order: 1
 ---
 
-# H3-Toolkit Documentation
+# h3-boundary Documentation
 
-High-performance H3 cell boundary tracing and polygon operations with C++ acceleration.
+H3 cell boundary tracing and buffered polygons across resolution hierarchies, with optional C++ acceleration.
 
 ## Quick Links
 
@@ -17,53 +17,48 @@ High-performance H3 cell boundary tracing and polygon operations with C++ accele
 
 ## Overview
 
-H3-Toolkit extends Uber's H3 library with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons.
+h3-boundary extends Uber's H3 library with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons.
 
 ### Key Features
 
-**High Performance**
-- C++ core with Python bindings via pybind11
-- 10-30x speedup over pure Python
-- Boost.Geometry for polygon operations
+**Boundary-only traversal**
+- Enumerate boundary children without materializing the parent's interior
+- Cost scales with the perimeter, not the area
 
-**Comprehensive API**
-- Boundary tracing across resolutions
-- Buffered polygon generation
+**Dual backend**
+- Pure Python (Shapely) everywhere; pybind11/Boost.Geometry C++ extension compiled automatically when a toolchain is available
+- Identical results, enforced by a parity test suite (including pentagons)
 - GeoJSON-compatible output
 
 ## Installation
 
 ```bash
-# Clone and install
+pip install h3-boundary
+```
+
+The C++ extension compiles automatically when `cmake`, a C++17 compiler, and the Boost headers are available; otherwise the package installs pure-Python. For development:
+
+```bash
 git clone https://github.com/Khoshkhah/h3-toolkit.git
 cd h3-toolkit
-
-# Create environment
-conda create -n h3-toolkit python=3.11
+conda env create -f environment.yml
 conda activate h3-toolkit
-conda install -c conda-forge boost-cpp
-
-# Install
 pip install -e .
 ```
 
 ## Quick Start
 
 ```python
-import h3_boundary as h3t
+import h3_boundary as h3b
 
 cell = '86283082fffffff'  # Resolution 6 cell
 
 # Get boundary children
-children = h3t.children_on_boundary_faces(cell, 10)
+children = h3b.children_on_boundary_faces(cell, 10)
 print(f"Found {len(children)} boundary children")
 
-# Get buffered polygon (C++ accelerated)
-result = h3t.get_buffered_boundary_polygon_cpp(
-    cell, 
-    intermediate_res=10,
-    use_convex_hull=False
-)
+# Buffered polygon guaranteed to contain all res-15 children
+result = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 
 # Returns GeoJSON Feature
 print(result['properties']['buffer_meters'])
@@ -71,11 +66,14 @@ print(result['properties']['buffer_meters'])
 
 ## Performance
 
-| Function | Python | C++ | Speedup |
-|----------|--------|-----|---------|
-| `children_on_boundary_faces` | 2.5ms | 0.23ms | **11x** |
-| `cell_boundary_from_children` | 150ms | 13ms | **11x** |
-| `get_buffered_boundary_polygon` | 170ms | 18ms | **9x** |
+| Function | Python | C++ |
+|----------|--------|-----|
+| `children_on_boundary_faces` | 0.14ms | 0.02ms |
+| `cell_boundary_from_children` | 1.3ms | 2.5ms |
+| `get_buffered_boundary_polygon` (accurate) | 5.9ms | 7.0ms |
+| `get_buffered_boundary_polygon` (fast hull) | — | 0.4ms |
+
+Resolution-6 cell, intermediate resolution 10. See the [API Reference](api_reference.md) for details.
 
 ## Documentation
 

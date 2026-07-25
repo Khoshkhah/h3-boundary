@@ -4,9 +4,9 @@ title: API Reference
 nav_order: 3
 ---
 
-# H3-Toolkit API Reference
+# h3-boundary API Reference
 
-Complete API documentation for H3-Toolkit.
+Complete API documentation for h3-boundary.
 
 ## Table of Contents
 
@@ -78,10 +78,12 @@ Returns all children at `target_res` that lie on the parent's specified boundary
 
 **Parameters:**
 - `parent`: Parent H3 cell index
-- `target_res`: Resolution to descend to (must be > parent resolution)
+- `target_res`: Resolution to descend to (parent resolution ≤ target_res ≤ 15; equal resolution returns `[parent]`)
 - `input_faces`: Set of face numbers {1-6} to filter by
 
 **Returns:** List of child H3 cell indices
+
+**Raises:** `ValueError` if `target_res` is below the parent's resolution or above 15.
 
 **Example:**
 ```python
@@ -92,8 +94,8 @@ print(f"Found {len(children)} boundary children")  # ~240 cells
 ```
 
 **Performance:**
-- Python: ~2.5ms
-- C++: ~0.23ms (11x faster)
+- Python: ~0.14ms
+- C++: ~0.02ms (7x faster)
 
 ---
 
@@ -195,9 +197,9 @@ C++ version of cell boundary to GeoJSON.
 cell_boundary_from_children_cpp(parent: str, target_res: int) -> Dict[str, Any]
 ```
 
-C++ version using Boost.Geometry union operations.
+C++ version using Boost.Geometry union operations (pairwise merge tree).
 
-**Performance:** ~13ms (vs ~150ms Python, **11x faster**)
+**Performance:** ~2.5ms at res 6 → 10. The pure-Python version is comparable (~1.3ms) because it delegates to H3's native `cells_to_h3shape`.
 
 #### `get_buffered_h3_polygon_cpp`
 
@@ -207,7 +209,7 @@ get_buffered_h3_polygon_cpp(cell: str, buffer_meters: float = None) -> Dict[str,
 
 C++ version of simple buffered polygon.
 
-**Performance:** ~0.14ms (vs ~0.5ms Python, **3x faster**)
+**Performance:** ~0.06ms (vs ~0.13ms Python, **2x faster**)
 
 #### `get_buffered_boundary_polygon_cpp`
 
@@ -226,9 +228,9 @@ C++ buffered polygon with configurable accuracy.
 - `cell`: H3 cell index
 - `intermediate_res`: Resolution for boundary computation (default: 10)
 - `buffer_meters`: Buffer distance. If None, auto-calculates as 100% of edge length
-- `use_convex_hull`: 
-  - `True`: Fast convex hull approximation (~0.6ms)
-  - `False`: Accurate union of all cells (~18ms)
+- `use_convex_hull`:
+  - `True`: Fast convex hull approximation (~0.4ms)
+  - `False` (default): Accurate union of all cells (~7ms)
 
 **Returns:** GeoJSON Feature with properties:
 - `h3_index`: Cell index
@@ -287,18 +289,18 @@ For direct C++ usage, include `h3_toolkit.hpp`:
 #include "h3_toolkit.hpp"
 
 // Trace faces
-std::set<int> faces = h3_boundary::trace_cell_to_ancestor_faces(
+std::set<int> faces = h3_toolkit::trace_cell_to_ancestor_faces(
     cell, input_faces, res_parent
 );
 
 // Get boundary children
-std::vector<H3Index> children = h3_boundary::children_on_boundary_faces(
+std::vector<H3Index> children = h3_toolkit::children_on_boundary_faces(
     parent, target_res
 );
 
 // Get buffered polygon (returns vector of (lon, lat) pairs)
 std::vector<std::pair<double, double>> polygon = 
-    h3_boundary::get_buffered_boundary_polygon(
+    h3_toolkit::get_buffered_boundary_polygon(
         cell, 
         intermediate_res, 
         buffer_meters,
@@ -309,7 +311,7 @@ std::vector<std::pair<double, double>> polygon =
 ### Function Signatures
 
 ```cpp
-namespace h3_boundary {
+namespace h3_toolkit {
 
 std::set<int> trace_cell_to_ancestor_faces(
     H3Index h,
@@ -349,23 +351,22 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     H3Index cell,
     int intermediate_res = 10,
     double buffer_meters = -1.0,
-    bool use_convex_hull = true
+    bool use_convex_hull = false
 );
 
-} // namespace h3_boundary
+} // namespace h3_toolkit
 ```
 
 ---
 
 ## Performance Summary
 
-| Function | Python | C++ | Speedup |
-|----------|--------|-----|---------|
-| `trace_cell_to_ancestor_faces` | 0.05ms | 0.005ms | 10x |
-| `children_on_boundary_faces` | 2.5ms | 0.23ms | 11x |
-| `cell_boundary_from_children` | 150ms | 13ms | 11x |
-| `get_buffered_boundary_polygon` (accurate) | 170ms | 18ms | 9x |
-| `get_buffered_boundary_polygon` (fast) | N/A | 0.6ms | - |
-| `get_buffered_h3_polygon` | 0.5ms | 0.14ms | 3x |
+| Function | Python | C++ |
+|----------|--------|-----|
+| `children_on_boundary_faces` | 0.14ms | 0.02ms |
+| `cell_boundary_from_children` | 1.3ms | 2.5ms |
+| `get_buffered_boundary_polygon` (accurate) | 5.9ms | 7.0ms |
+| `get_buffered_boundary_polygon` (fast hull) | N/A | 0.4ms |
+| `get_buffered_h3_polygon` | 0.13ms | 0.06ms |
 
-*Benchmarks on resolution 6 cell with intermediate resolution 10*
+*Benchmarks on a resolution 6 cell with intermediate resolution 10 (Linux, Python 3.14). The C++ backend is fastest for face tracing and hull mode; Python polygon merging is comparable because it uses H3's native `cells_to_h3shape`.*

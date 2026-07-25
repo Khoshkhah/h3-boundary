@@ -1,35 +1,33 @@
-# H3-Toolkit
+# h3-boundary
 
-**High-performance H3 cell boundary tracing and polygon operations with C++ acceleration.**
+**H3 cell boundary tracing and buffered polygons across resolution hierarchies, with optional C++ acceleration.**
 
-H3-Toolkit extends Uber's H3 library with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons that guarantee containment of all child cells.
+h3-boundary extends [Uber's H3 library](https://h3geo.org/) with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons that guarantee containment of all child cells.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-### Performance
-- **C++ Core**: Critical algorithms implemented in C++ with Python bindings via pybind11
-- **10-30x Speedup**: C++ functions significantly outperform pure Python equivalents
-- **Boost.Geometry**: Professional-grade polygon operations (buffer, union, convex hull)
+- **Boundary-only traversal**: enumerate the children on a parent's boundary without materializing its interior — cost scales with the perimeter, not the area
+- **Face tracing**: track which parent/ancestor faces a cell touches, in both directions of the hierarchy
+- **Buffered polygons**: fast (convex hull) or accurate (union) polygons guaranteed to contain all fine-resolution children
+- **Dual backend**: pure Python (Shapely) everywhere, with a pybind11/Boost.Geometry C++ extension compiled automatically when a toolchain is available — same results, verified by a parity test suite (including pentagons)
 
-### Key Functions
-
-| Function | Description | C++ |
-|----------|-------------|-----|
-| `trace_cell_to_ancestor_faces` | Track which parent faces a cell touches | ✅ |
-| `children_on_boundary_faces` | Get boundary children at target resolution | ✅ |
-| `cell_boundary_from_children` | Merge boundary children into single polygon | ✅ |
-| `get_buffered_boundary_polygon` | Buffered polygon with configurable accuracy | ✅ |
-| `get_buffered_h3_polygon` | Simple buffered cell polygon | ✅ |
-| `cell_to_coarsest_ancestor_on_faces` | Find coarsest ancestor on boundary | ✅ |
+| Function | Description |
+|----------|-------------|
+| `children_on_boundary_faces` | Boundary children of a cell at a target resolution |
+| `trace_cell_to_ancestor_faces` | Which ancestor faces a cell touches |
+| `cell_to_coarsest_ancestor_on_faces` | Coarsest ancestor still touching given faces |
+| `cell_boundary_from_children` | Merge boundary children into a single polygon |
+| `get_buffered_boundary_polygon` | Buffered polygon with configurable accuracy |
+| `get_buffered_h3_polygon` | Simple buffered cell polygon |
 
 ## Documentation
 
 Visit the **[Full Documentation](https://khoshkhah.github.io/h3-toolkit/)** to explore:
 - **Interactive Demo**: Visualize boundary tracing and buffering
-- **Concepts**: Learn about H3 hierarchy and memory layout
+- **Concepts**: Learn about H3 hierarchy and face mappings
 - **API Reference**: Detailed documentation of all functions
 
 You can also run the demo locally using the provided Jupyter Notebook:
@@ -39,235 +37,136 @@ jupyter notebook notebook/demo_generation.ipynb
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.10+
-- CMake 3.14+
-- C++17 compiler
-- Boost (for Boost.Geometry)
-
-### From Source
-
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/h3-toolkit.git
-cd h3-toolkit
-
-# Create conda environment (recommended)
-conda create -n h3-toolkit python=3.11
-conda activate h3-toolkit
-conda install -c conda-forge boost-cpp
-
-# Build and install
-pip install -e .
+pip install h3-boundary
 ```
 
-### Verify Installation
+The package is published as a source distribution. During installation the C++ extension is compiled automatically if `cmake`, a C++17 compiler, the Boost headers, and network access (the H3 sources are fetched at build time) are available. If any of these are missing, installation still succeeds and the package runs pure-Python — check with:
 
 ```python
 import h3_boundary
-print(h3_boundary.get_backend())  # Should print 'cpp'
-print(h3_toolkit.cpp_geom_available())  # Should print True
+print(h3_boundary.get_backend())        # 'cpp' or 'python'
+print(h3_boundary.cpp_geom_available()) # True if C++ geometry (*_cpp) exists
+```
+
+### From source
+
+```bash
+git clone https://github.com/Khoshkhah/h3-toolkit.git
+cd h3-toolkit
+
+# Recommended environment (conda)
+conda env create -f environment.yml
+conda activate h3-toolkit
+
+pip install -e .
 ```
 
 ## Quick Start
 
-### Basic Usage
-
 ```python
-import h3_boundary as h3t
+import h3_boundary as h3b
 
-# Get a cell
 cell = '86283082fffffff'  # Resolution 6 cell in San Francisco
 
-# Get boundary children at resolution 10
-children = h3t.children_on_boundary_faces(cell, 10)
-print(f"Boundary children: {len(children)}")  # ~240 cells
+# Children on the parent's boundary at resolution 10 (~240 cells,
+# instead of ~2.8 million interior children)
+children = h3b.children_on_boundary_faces(cell, 10)
 
-# Get merged boundary polygon (C++ accelerated)
-boundary = h3t.cell_boundary_from_children_cpp(cell, 10)
-print(f"Vertices: {len(boundary['geometry']['coordinates'][0])}")
+# Merged boundary polygon (GeoJSON Feature)
+boundary = h3b.cell_boundary_from_children(cell, 10)
+
+# Buffered polygon guaranteed to contain all res-15 children
+buffered = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
+print(buffered['properties']['buffer_meters'])
 ```
 
-### Buffered Polygons
+### Buffered polygon modes (C++ extension)
 
 ```python
-# Fast mode (convex hull) - ~0.6ms
-fast_poly = h3t.get_buffered_boundary_polygon_cpp(
-    cell, 
-    intermediate_res=10,
-    use_convex_hull=True
-)
+# Fast mode (convex hull) — ~0.4 ms
+fast_poly = h3b.get_buffered_boundary_polygon_cpp(cell, 10, use_convex_hull=True)
 
-# Accurate mode (union) - ~18ms, matches exact boundary
-accurate_poly = h3t.get_buffered_boundary_polygon_cpp(
-    cell,
-    intermediate_res=10, 
-    use_convex_hull=False
-)
-
-# Simple cell buffer - ~0.1ms
-simple_poly = h3t.get_buffered_h3_polygon_cpp(cell, buffer_meters=100)
+# Accurate mode (union of boundary cells) — default
+accurate_poly = h3b.get_buffered_boundary_polygon_cpp(cell, 10)
 ```
 
-### Choosing Python vs C++
+All geometry functions exist in two flavors returning identical GeoJSON: plain (pure Python/Shapely, always available) and `*_cpp` (Boost.Geometry, only when the extension compiled — guard with `cpp_geom_available()`).
 
-All functions have both Python and C++ versions:
+## Performance
 
-```python
-# Pure Python (uses Shapely)
-from h3_boundary import get_buffered_boundary_polygon
-result_py = get_buffered_boundary_polygon(cell, 10)
+Measured on a resolution-6 cell with `intermediate_res=10` (Linux, Python 3.14):
 
-# C++ accelerated (uses Boost.Geometry)
-from h3_boundary import get_buffered_boundary_polygon_cpp
-result_cpp = get_buffered_boundary_polygon_cpp(cell, 10)
+| Function | Python | C++ |
+|----------|--------|-----|
+| `children_on_boundary_faces` | 0.14 ms | 0.02 ms |
+| `cell_boundary_from_children` | 1.3 ms | 2.5 ms |
+| `get_buffered_boundary_polygon` (accurate) | 5.9 ms | 7.0 ms |
+| `get_buffered_boundary_polygon` (fast hull) | — | 0.4 ms |
+| `get_buffered_h3_polygon` | 0.13 ms | 0.06 ms |
 
-# Both return identical GeoJSON format
-```
+The C++ backend shines for face tracing / boundary enumeration and the fast hull mode; for polygon merging the pure-Python path is equally fast because it delegates to H3's native `cells_to_h3shape`. A resolution-2 parent with ~6,500 boundary cells at resolution 9 merges in ~80 ms; ~531,000 boundary cells at resolution 13 in ~11 s.
 
-## Performance Benchmarks
+## How It Works
 
-Tested on resolution 6 cell with intermediate resolution 10:
+### Boundary face tracing
 
-| Function | Python | C++ | Speedup |
-|----------|--------|-----|---------|
-| `children_on_boundary_faces` | 2.5ms | 0.23ms | **11x** |
-| `cell_boundary_from_children` | 150ms | 13ms | **11x** |
-| `get_buffered_boundary_polygon` (accurate) | 170ms | 18ms | **9x** |
-| `get_buffered_boundary_polygon` (fast) | N/A | 0.6ms | - |
-| `get_buffered_h3_polygon` | 0.5ms | 0.14ms | **3x** |
+H3 cells have 6 faces (edges), numbered 1–6. When a cell is subdivided, child faces map to parent faces depending only on the resolution parity (H3's aperture-7 grid alternates orientation between levels) and the child position (0–6, where 0 is the interior center child). h3-boundary encodes these relationships in precomputed lookup tables — forward tables to trace a cell up the hierarchy, reversed tables to enumerate boundary children down it, with separate tables for pentagons. This is what lets it walk only the boundary subtree.
 
-## API Reference
+### Buffered polygons
 
-### Core Functions
+Two modes:
 
-#### `children_on_boundary_faces(parent, target_res, input_faces={1,2,3,4,5,6})`
+1. **Convex hull (fast)**: hull of all boundary-cell vertices, then buffer
+2. **Union (accurate)**: union of all boundary-cell polygons, then buffer
 
-Returns all children at `target_res` that lie on the parent's boundary faces.
-
-```python
-children = h3t.children_on_boundary_faces('86283082fffffff', 10)
-# Returns: ['8a28308280c7fff', '8a28308280cffff', ...]
-```
-
-#### `get_buffered_boundary_polygon_cpp(cell, intermediate_res=10, buffer_meters=None, use_convex_hull=False)`
-
-Returns a buffered polygon guaranteed to contain all res-15 children.
-
-**Parameters:**
-- `cell`: H3 cell index (string)
-- `intermediate_res`: Resolution for boundary computation (default: 10)
-- `buffer_meters`: Buffer distance. If None, auto-calculates as 100% of edge length
-- `use_convex_hull`: True for fast convex hull, False for accurate union
-
-**Returns:** GeoJSON Feature with buffered polygon
-
-```python
-result = h3t.get_buffered_boundary_polygon_cpp(
-    '86283082fffffff',
-    intermediate_res=10,
-    use_convex_hull=False
-)
-print(result['properties']['buffer_meters'])  # 75.86
-print(result['properties']['method'])  # 'buffered_boundary_cpp'
-```
-
-### Utility Functions
-
-#### `trace_cell_to_ancestor_faces(h, input_faces, res_parent)`
-
-Traces which parent faces a given cell lies on.
-
-#### `cell_to_coarsest_ancestor_on_faces(h, input_faces={1,2,3,4,5,6})`
-
-Finds the coarsest ancestor where the cell still lies on boundary faces.
-
-#### `get_backend()`
-
-Returns current backend: `'cpp'` or `'python'`
-
-#### `cpp_geom_available()`
-
-Returns `True` if C++ geometry functions (Boost.Geometry) are available.
+The buffer distance defaults to 100% of the intermediate-resolution edge length, which guarantees the result contains all res-15 children of the cell.
 
 ## Project Structure
 
 ```
-h3-toolkit/
-├── CMakeLists.txt           # CMake build configuration
-├── README.md                # This file
-├── pyproject.toml           # Python package configuration
+h3-toolkit/                      # repository (PyPI package: h3-boundary)
+├── CMakeLists.txt               # C++ build (fetches H3, links Boost)
+├── pyproject.toml               # package metadata
+├── setup.py                     # CMake <-> setuptools bridge
 ├── src/
-│   ├── cpp/
-│   │   ├── include/
-│   │   │   └── h3_toolkit.hpp    # C++ header
-│   │   └── src/
-│   │       └── h3_toolkit.cpp    # C++ implementation
-│   ├── bindings/
-│   │   └── python_bindings.cpp   # pybind11 bindings
-│   └── python/
-│       └── h3_boundary/
-│           ├── __init__.py       # Package exports
-│           ├── geom.py           # Python geometry functions
-│           └── utils.py          # Python utility functions
+│   ├── cpp/                     # C++ core (h3_toolkit.hpp / .cpp)
+│   ├── bindings/                # pybind11 module _h3_boundary_cpp
+│   └── python/h3_boundary/      # Python package
+│       ├── __init__.py          # backend selection + C++ GeoJSON wrappers
+│       ├── utils.py             # face tracing (pure Python reference)
+│       └── geom.py              # geometry (Shapely)
 ├── tests/
-│   └── test_h3_boundary.py   # Test suite
-└── docs/
-    └── api_reference.md     # Detailed API documentation
+│   ├── python/test_utils.py     # unit tests
+│   ├── python/test_parity.py    # C++ vs Python parity suite
+│   └── cpp/                     # C++ smoke test
+├── benchmarks/                  # Python + C++ benchmarks
+├── notebook/                    # Jupyter demos
+└── docs/                        # documentation site
 ```
-
-## How It Works
-
-### Boundary Face Tracing
-
-H3 cells have 6 faces (edges). When a cell is subdivided, child cells inherit different face relationships based on:
-- **Resolution parity** (even/odd)
-- **Child position** (0-6, where 0 is center)
-
-The library uses precomputed lookup tables to efficiently trace these relationships.
-
-### Buffered Polygons
-
-Two modes are available:
-
-1. **Convex Hull (fast)**: Computes convex hull of all boundary vertices, then buffers
-2. **Union (accurate)**: Unions all boundary cell polygons, then buffers
-
-The buffer distance is auto-calculated as 100% of the intermediate resolution edge length to guarantee all res-15 children are contained.
 
 ## Development
 
-### Building from Source
-
 ```bash
-# Configure with CMake
-mkdir build && cd build
+# Build the C++ extension
+mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
-
-# Build
 make -j4
-
-# Copy to Python package
 cp _h3_boundary_cpp*.so ../src/python/h3_boundary/
+
+# Run tests
+pytest tests/python -v
+./build/h3_toolkit_test
 ```
 
-### Running Tests
-
-```bash
-pytest tests/ -v
-```
+See [CONTRIBUTING.md](https://github.com/Khoshkhah/h3-toolkit/blob/master/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+MIT License — see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE).
 
 ## Acknowledgments
 
-- [Uber H3](https://h3geo.org/) - The H3 hexagonal hierarchical spatial index
-- [Boost.Geometry](https://www.boost.org/doc/libs/release/libs/geometry/) - Polygon operations
-- [pybind11](https://github.com/pybind/pybind11) - Python bindings for C++
+- [Uber H3](https://h3geo.org/) — the H3 hexagonal hierarchical spatial index
+- [Boost.Geometry](https://www.boost.org/doc/libs/release/libs/geometry/) — polygon operations
+- [pybind11](https://github.com/pybind/pybind11) — Python bindings for C++

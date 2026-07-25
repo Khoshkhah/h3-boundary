@@ -144,14 +144,38 @@ try:
     from ._h3_boundary_cpp import get_buffered_h3_polygon as _cpp_get_buffered_h3_polygon
     
     def cell_boundary_to_geojson_cpp(cell: str):
-        """C++ version of cell_boundary_to_geojson. Returns GeoJSON Feature."""
+        """
+        C++ version of cell_boundary_to_geojson.
+
+        Args:
+            cell: H3 cell index (hex string).
+
+        Returns:
+            GeoJSON Feature with a Polygon geometry (closed [lon, lat] ring)
+            and properties {"h3_index", "method": "cpp"}.
+        """
         coords = _cpp_cell_boundary(cell)
         geojson_coords = [[c[0], c[1]] for c in coords]
         polygon = _geojson.Polygon([geojson_coords])
         return _geojson.Feature(geometry=polygon, properties={"h3_index": cell, "method": "cpp"})
     
     def cell_boundary_from_children_cpp(parent: str, target_res: int):
-        """C++ version of cell_boundary_from_children. Returns GeoJSON Feature."""
+        """
+        C++ version of cell_boundary_from_children.
+
+        Unions the parent's boundary children at `target_res` (Boost.Geometry,
+        single traversal) and returns the largest resulting polygon.
+
+        Args:
+            parent: Parent H3 cell index (hex string).
+            target_res: Resolution of the boundary children
+                (parent resolution <= target_res <= 15).
+
+        Returns:
+            GeoJSON Feature with the merged boundary Polygon and properties
+            {"h3_index", "child_resolution", "num_boundary_cells",
+            "method": "cpp"}.
+        """
         coords, num_cells = _cpp_cell_boundary_from_children_with_count(parent, target_res)
         geojson_coords = [[c[0], c[1]] for c in coords]
         polygon = _geojson.Polygon([geojson_coords])
@@ -166,7 +190,18 @@ try:
         )
     
     def get_buffered_h3_polygon_cpp(cell: str, buffer_meters: float = None):
-        """C++ version of get_buffered_h3_polygon. Returns GeoJSON Feature."""
+        """
+        C++ version of get_buffered_h3_polygon: buffers the cell's own boundary.
+
+        Args:
+            cell: H3 cell index (hex string).
+            buffer_meters: Buffer distance in meters. If None, auto-calculated
+                as 100% of the edge length four resolutions finer (capped at 15).
+
+        Returns:
+            GeoJSON Feature with the buffered Polygon and properties
+            {"h3_index", "buffer_meters", "method": "buffered_cpp"}.
+        """
         cpp_buffer = buffer_meters if buffer_meters is not None else -1.0
         coords = _cpp_get_buffered_h3_polygon(cell, cpp_buffer)
         geojson_coords = [[c[0], c[1]] for c in coords]
@@ -193,9 +228,45 @@ except ImportError:
     pass
 
 def get_backend():
-    """Returns the current backend: 'cpp' or 'python'"""
+    """
+    Returns which backend serves the face-tracing functions: 'cpp' or 'python'.
+
+    Decided once at import time: 'cpp' if the compiled _h3_boundary_cpp
+    extension loaded, else the pure-Python fallback.
+    """
     return _BACKEND
 
 def cpp_geom_available():
-    """Returns True if C++ geometry functions (Boost.Geometry) are available"""
+    """
+    Returns True if the C++ geometry functions (*_cpp, Boost.Geometry) exist.
+
+    When False (pure-Python install), only the Shapely-based versions without
+    the _cpp suffix are available.
+    """
     return _CPP_GEOM_AVAILABLE
+
+# The *_cpp geometry functions exist only when the compiled extension loaded;
+# check cpp_geom_available() before relying on them.
+__all__ = [
+    # Face tracing (C++-accelerated when available)
+    "trace_cell_to_ancestor_faces",
+    "trace_cell_to_parent_faces",
+    "children_on_boundary_faces",
+    "cell_to_coarsest_ancestor_on_faces",
+    # Geometry (pure Python / Shapely)
+    "cell_boundary_to_geojson",
+    "get_boundary_cells",
+    "cell_boundary_from_children",
+    "get_buffered_h3_polygon",
+    "get_buffered_boundary_polygon",
+    # Introspection
+    "get_backend",
+    "cpp_geom_available",
+    "__version__",
+] + ([
+    # Geometry (C++ / Boost.Geometry)
+    "cell_boundary_to_geojson_cpp",
+    "cell_boundary_from_children_cpp",
+    "get_buffered_h3_polygon_cpp",
+    "get_buffered_boundary_polygon_cpp",
+] if _CPP_GEOM_AVAILABLE else [])

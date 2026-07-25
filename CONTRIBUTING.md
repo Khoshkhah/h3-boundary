@@ -8,7 +8,7 @@ Thank you for your interest in contributing to H3-Toolkit! This document provide
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/h3-toolkit.git
+   git clone https://github.com/Khoshkhah/h3-toolkit.git
    cd h3-toolkit
    ```
 

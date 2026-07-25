@@ -35,7 +35,14 @@ def _get_children_on_boundary_faces():
 
 def cell_boundary_to_geojson(h: str) -> Dict[str, Any]:
     """
-    Returns a GeoJSON Feature representing the cell boundary.
+    Returns the cell's own boundary as a GeoJSON Feature.
+
+    Args:
+        h: H3 cell index (hex string).
+
+    Returns:
+        GeoJSON Feature with a Polygon geometry (closed [lon, lat] ring) and
+        a properties dict containing "h3_index".
     """
     # h3-py v4: cell_to_boundary returns ((lat, lon), ...) tuples
     boundary = h3.cell_to_boundary(h)
@@ -54,13 +61,19 @@ def get_boundary_cells(polygon_geojson: Dict[str, Any], res: int) -> Dict[str, S
     1. Polyfill the polygon to get the set of cells.
     2. Identify "edge cells" (cells with neighbors outside the set).
     3. For edge cells, mark faces as exposed.
-    
+
+    Note: cost scales with the polygon's *area* (the full polyfill is
+    materialized), not its perimeter. The per-cell face sets are currently a
+    placeholder — every edge cell is reported with all faces {1-6}; a refined
+    per-face mapping is not implemented.
+
     Args:
         polygon_geojson: GeoJSON dictionary (Polygon).
         res: Target H3 resolution.
 
     Returns:
-        Dict mapping H3 index (str) to a Set of exposed face indices {1-6}.
+        Dict mapping H3 index (str) to a Set of exposed face indices, always
+        {1, 2, 3, 4, 5, 6} in the current implementation.
     """
     # h3-py v4: Use polygon_to_cells with GeoJSON-style polygon
     # Extract coordinates from GeoJSON and convert to h3.LatLngPoly

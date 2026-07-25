@@ -1,5 +1,23 @@
 """
-Core utility functions for H3 boundary tracing.
+Core face-tracing functions for H3 boundary computation (pure Python).
+
+Face model: every H3 cell has six boundary faces (edges), numbered 1-6.
+(Pentagons have five; the tables simply never map anything to a sixth
+pentagon face.) When a cell is subdivided, each child either lies strictly
+inside the parent or touches one or more of the parent's faces. Which child
+faces land on which parent faces depends only on:
+
+- the *resolution parity* of the child level (H3's aperture-7 subdivision
+  alternates orientation between even and odd resolutions), and
+- the *child position* (0-6 as returned by h3.cell_to_child_pos; 0 is the
+  center child, which never touches the parent boundary).
+
+That relationship is encoded in the four lookup tables below — forward
+(child face -> parent face, used to trace a cell upward) and reversed
+(parent face -> child faces, used to enumerate boundary children downward),
+for hexagons and pentagons. The C++ backend's constexpr tables in
+src/cpp/src/h3_toolkit.cpp are generated from these dicts; if the mappings
+ever change, regenerate them from here.
 """
 import h3
 from typing import Set, List, Dict, Optional
@@ -159,7 +177,18 @@ def trace_cell_to_parent_faces(
     input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
 ) -> Set[int]:
     """
-    Traces which boundary faces the target cell lies on with respect to its parent cell.
+    Traces which boundary faces the cell lies on with respect to its immediate parent.
+
+    Equivalent to ``trace_cell_to_ancestor_faces(h, input_faces, res - 1)``.
+
+    Args:
+        h: Target H3 cell index (hex string).
+        input_faces: Subset of the cell's face numbers {1-6} to trace.
+
+    Returns:
+        Set of parent face numbers (1-6) the cell lies on; empty set if the
+        cell does not touch the parent's boundary (e.g. it is a center child
+        or a pentagon).
     """
     parent_res = h3.get_resolution(h) - 1
     return trace_cell_to_ancestor_faces(h, input_faces, res_parent=parent_res)
@@ -170,8 +199,19 @@ def cell_to_coarsest_ancestor_on_faces(
     input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
 ) -> str:
     """
-    Finds the coarsest ancestor (lowest resolution) such that the target cell `h`
-    lies on at least one of the specified `input_faces`.
+    Finds the coarsest ancestor whose boundary the cell still lies on.
+
+    Walks up the resolution hierarchy as long as the cell keeps tracing to at
+    least one of the requested faces, and returns the last ancestor for which
+    that held.
+
+    Args:
+        h: Target H3 cell index (hex string).
+        input_faces: Subset of face numbers {1-6} to trace upward.
+
+    Returns:
+        H3 index (hex string) of the coarsest such ancestor. Returns `h`
+        itself if the cell does not lie on its parent's boundary at all.
     """
     res = h3.get_resolution(h)
     current_h = h
@@ -196,8 +236,29 @@ def children_on_boundary_faces(
     input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
 ) -> List[str]:
     """
-    Returns all children of the given parent cell at `target_res` resolution
-    that lie on the parent's specified boundary `input_faces`.
+    Returns all descendants of `parent` at `target_res` that lie on the
+    parent's specified boundary faces.
+
+    Only the boundary subtree is traversed (via the reversed face-mapping
+    tables), so cost scales with the number of boundary cells — roughly
+    6 * sqrt(7)^(target_res - parent_res) — not with the parent's full
+    interior (7^(target_res - parent_res)).
+
+    Args:
+        parent: Parent H3 cell index (hex string).
+        target_res: Resolution of the returned children. Must satisfy
+            parent resolution <= target_res <= 15. Equal resolution returns
+            [parent].
+        input_faces: Parent face numbers {1-6} to cover. Defaults to all six,
+            i.e. the parent's complete boundary ring.
+
+    Returns:
+        List of H3 indexes (hex strings) at `target_res`, in depth-first
+        order along the boundary.
+
+    Raises:
+        ValueError: If `target_res` is below the parent's resolution or
+            above 15.
     """
     res_parent = h3.get_resolution(parent)
     if target_res < res_parent:
