@@ -268,6 +268,30 @@ Four things this shows:
 
 Reproduce with `python benchmarks/compare_implementations.py`.
 
+### How each one is parallelized
+
+Neither approach parallelizes the recursion itself — the work is *split up front*, and the two split differently.
+
+**Ordered: by index range.** This is where the counting rule earns its keep. Worker *k* takes `[lo, hi)`, seeks straight to `lo` in Δ steps, and streams its slice; no worker needs to know what the others produced, and concatenating the slices in order reproduces the traversal exactly.
+
+```python
+lo, hi = total * k // n, total * (k + 1) // n
+part = boundary_range_ids(parent, target_res, lo, hi)
+```
+
+Shards are equal-sized by construction and you can have as many as you like.
+
+**Bulk: by subtree.** There are no positions to slice, so the split is structural — the parent's 6 surviving children, each expanded independently with its own face state. That caps the useful parallelism at 6, and splitting deeper backfires, because each bulk task has fixed setup and the arrays stop being big enough to pay for it:
+
+| Bulk split (531,438 cells) | Time |
+|---|---|
+| serial | 3.3 ms |
+| 6 tasks (one level down) | **2.1 ms** |
+| 24 tasks (two levels) | 3.7 ms |
+| 78 tasks (three levels) | 5.4 ms |
+
+So the two trade places under parallelism: bulk is far ahead serially, but ordered keeps scaling — with 12 index shards it reaches 1.8 ms, past the best bulk number. Bulk is the right default; index sharding is what you want when you have cores to spend.
+
 ### Which to use
 
 - **some cells** → `boundary_cell_at` / `boundary_range`

@@ -53,7 +53,13 @@ def ordered_cpp_threads(parent, target_res, total, workers=WORKERS):
 
 def top_level_tasks(parent, target_res):
     """The parent's surviving children with their states — the natural way to
-    split unordered work, since each subtree is independent."""
+    split unordered work, since each subtree is independent.
+
+    Note this caps parallelism at 6 units. Splitting a level deeper (24 tasks,
+    then 78) measures *slower* than 6: each bulk expansion has fixed setup, and
+    the per-task arrays stop being large enough to pay for it. Ordered work has
+    no such limit because index ranges can be cut anywhere.
+    """
     res_parent = h3.get_resolution(parent)
     parity = (res_parent + 1) % 2
     shift = (15 - (res_parent + 1)) * 3
