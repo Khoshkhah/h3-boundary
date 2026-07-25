@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include "h3_toolkit.hpp"
 #include <h3api.h>
+#include <optional>
 #include <sstream>
 #include <iomanip>
 
@@ -27,10 +28,12 @@ H3Index string_to_h3(const std::string& s) {
 std::set<int> py_trace_cell_to_ancestor_faces(
     const std::string& h_str,
     const std::set<int>& input_faces,
-    int res_parent
+    std::optional<int> res_parent
 ) {
     H3Index h = string_to_h3(h_str);
-    return h3_toolkit::trace_cell_to_ancestor_faces(h, input_faces, res_parent);
+    // Matches the Python default: None means the immediate parent.
+    int rp = res_parent.value_or(getResolution(h) - 1);
+    return h3_toolkit::trace_cell_to_ancestor_faces(h, input_faces, rp);
 }
 
 // Wrapper for trace_cell_to_parent_faces
@@ -63,11 +66,14 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
     m.doc() = "H3-Toolkit C++ bindings for Python";
     
     m.def("trace_cell_to_ancestor_faces", &py_trace_cell_to_ancestor_faces,
-          py::arg("h"), py::arg("input_faces"), py::arg("res_parent"),
+          py::arg("h"),
+          py::arg("input_faces") = std::set<int>{1, 2, 3, 4, 5, 6},
+          py::arg("res_parent") = py::none(),
           "Trace which faces of an ancestor cell a given cell lies on.");
-    
+
     m.def("trace_cell_to_parent_faces", &py_trace_cell_to_parent_faces,
-          py::arg("h"), py::arg("input_faces"),
+          py::arg("h"),
+          py::arg("input_faces") = std::set<int>{1, 2, 3, 4, 5, 6},
           "Trace which faces of the parent cell a given cell lies on.");
     
     m.def("children_on_boundary_faces", &py_children_on_boundary_faces,
@@ -134,6 +140,6 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
               }
               return result;
           },
-          py::arg("cell"), py::arg("intermediate_res") = 10, py::arg("buffer_meters") = -1.0, py::arg("use_convex_hull") = true,
-          "Returns a buffered polygon. use_convex_hull=True is fast, use_convex_hull=False is accurate.");
+          py::arg("cell"), py::arg("intermediate_res") = 10, py::arg("buffer_meters") = -1.0, py::arg("use_convex_hull") = false,
+          "Returns a buffered polygon. use_convex_hull=True is fast, use_convex_hull=False (default) is accurate.");
 }

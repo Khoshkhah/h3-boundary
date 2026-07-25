@@ -116,40 +116,25 @@ std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input
         }
 
         int parity = res % 2;
-        // cellToParent and cellToChildPos
-        // Note: libh3 C API names
         H3Index parent;
         cellToParent(current_h, res - 1, &parent);
-        
-        long long child_pos; // 0-6
-        // Not a direct C API function like cellToChildPos? 
-        // Actually cellToChildPos is probably not exposed in standard C API directly in older versions?
-        // Wait, standard H3 C library has `cellToChildPos` in v4? 
-        // Or we might need to derive it if not available.
-        // Let's assume v4 API or we check index digits.
-        // H3 index structure: valid mode (4 bits), res (4 bits), base cell (7 bits), 15 digits (3 bits each).
-        // Since we are traversing standard implementation, we can extract the digit at current resolution.
-        
-        // Manual extraction of digit for resolution `res`:
-        // Digit is bits at ((15 - res) * 3).
-        // Actually, easy way: `current_h` & 7 is NOT correct because it's shifted.
-        // Let's use `h3GetResolution(current_h)` to verify we are at `res`.
-        // The digit at `res` is (current_h >> ((15 - res) * 3)) & 0x7;
-        
-        child_pos = (current_h >> ((15 - res) * 3)) & 0x7;
+        bool parent_is_pent = isPentagon(parent);
 
-        if (isPentagon(parent)) {
-            // Logic for pentagon parent
-            // But wait, pentagon don't have 7 children properly indexable by 0-6 in same way?
-            // Actually they do, but index 1 deleted.
-             // We can use the mapping tables.
+        // Index digit for resolution `res`: 3 bits at offset (15 - res) * 3.
+        long long child_pos = (current_h >> ((15 - res) * 3)) & 0x7;
+
+        // The tables are keyed by child *position*. For hexagon parents the
+        // digit equals the position; pentagon parents skip digit 1, so the
+        // position is digit - 1 (digit 0 stays the center child).
+        if (parent_is_pent && child_pos > 0) {
+            child_pos -= 1;
         }
 
         if (child_pos == 0) {
             return {};
         }
 
-        const auto& mapping = isPentagon(parent) ? get_pent_mapping() : get_hex_mapping();
+        const auto& mapping = parent_is_pent ? get_pent_mapping() : get_hex_mapping();
         
         // Safe access
         if (mapping.count(parity) && mapping.at(parity).count(child_pos)) {
@@ -227,12 +212,41 @@ static const std::map<int, std::map<int, std::map<int, std::set<int>>>>& get_rev
     return m;
 }
 
+// Mirrors _reversed_boundary_face_mapping_pent in utils.py; keyed by child
+// position (pentagon children have positions 0-5).
+static const std::map<int, std::map<int, std::map<int, std::set<int>>>>& get_reversed_pent_mapping() {
+    static std::map<int, std::map<int, std::map<int, std::set<int>>>> m;
+    if (m.empty()) {
+        // Even resolutions
+        m[0][1] = {{1, {2, 6}}, {5, {4}}};
+        m[0][2] = {{1, {6}}, {2, {2, 3}}};
+        m[0][3] = {{4, {1}}, {3, {4, 5}}};
+        m[0][4] = {{4, {5}}, {2, {1, 3}}};
+        m[0][5] = {{5, {4, 6}}, {3, {5}}};
+        m[0][6] = {};
+        m[0][0] = {};
+
+        // Odd resolutions
+        m[1][1] = {{5, {2, 6}}, {1, {3}}};
+        m[1][2] = {{2, {1}}, {1, {2, 3}}};
+        m[1][3] = {{3, {6}}, {4, {4, 5}}};
+        m[1][4] = {{4, {4}}, {2, {1, 5}}};
+        m[1][5] = {{5, {2}}, {3, {4, 6}}};
+        m[1][6] = {};
+        m[1][0] = {};
+    }
+    return m;
+}
+
 std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, const std::set<int>& input_faces) {
     int res_parent = getResolution(parent);
-    if (target_res <= res_parent) {
-        throw std::invalid_argument("target_res must be greater than parent cell resolution");
+    if (target_res < res_parent) {
+        throw std::invalid_argument("target_res must be greater than or equal to parent cell resolution");
     }
-    
+    if (target_res > 15) {
+        throw std::invalid_argument("target_res must be <= 15");
+    }
+
     std::vector<H3Index> result;
     
     // Recursive helper using lambda
@@ -245,21 +259,27 @@ std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, 
         
         int parity = (res + 1) % 2;
         bool is_pent = isPentagon(current);
-        
-        const auto& reverse_mapping = get_reversed_hex_mapping().at(parity);
-        
+
+        const auto& reverse_mapping = (is_pent ? get_reversed_pent_mapping()
+                                               : get_reversed_hex_mapping()).at(parity);
+
         // Get children
         int64_t num_children;
         cellToChildrenSize(current, res + 1, &num_children);
         std::vector<H3Index> children(num_children);
         cellToChildren(current, res + 1, children.data());
-        
+
         for (H3Index child : children) {
             if (child == 0) continue;
-            
-            // Extract child position digit
+
+            // Tables are keyed by child position: equal to the index digit for
+            // hexagon parents; pentagon parents skip digit 1, so position is
+            // digit - 1 (digit 0 stays the center child).
             int child_pos = (child >> ((15 - (res + 1)) * 3)) & 0x7;
-            
+            if (is_pent && child_pos > 0) {
+                child_pos -= 1;
+            }
+
             if (reverse_mapping.count(child_pos) == 0) continue;
             
             const auto& child_mapping = reverse_mapping.at(child_pos);
@@ -283,10 +303,38 @@ std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, 
     return result;
 }
 
+typedef bg::model::d2::point_xy<double> point_type;
+typedef bg::model::polygon<point_type> polygon_type;
+typedef bg::model::multi_polygon<polygon_type> multi_polygon_type;
+
+// The union of many cells can transiently or finally be a multi-polygon;
+// the meaningful result is the largest piece, matching the Python backend.
+static const polygon_type* largest_by_area(const multi_polygon_type& mp) {
+    const polygon_type* best = nullptr;
+    double best_area = -1.0;
+    for (const auto& p : mp) {
+        double a = bg::area(p);
+        if (a > best_area) {
+            best_area = a;
+            best = &p;
+        }
+    }
+    return best;
+}
+
+static std::vector<std::pair<double, double>> outer_ring(const polygon_type& poly) {
+    std::vector<std::pair<double, double>> result;
+    result.reserve(poly.outer().size());
+    for (const auto& pt : poly.outer()) {
+        result.emplace_back(pt.x(), pt.y());
+    }
+    return result;
+}
+
 std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
     CellBoundary cb;
     cellToBoundary(cell, &cb);
-    
+
     std::vector<std::pair<double, double>> result;
     for (int i = 0; i < cb.numVerts; ++i) {
         result.emplace_back(radsToDegs(cb.verts[i].lng), radsToDegs(cb.verts[i].lat));
@@ -299,10 +347,6 @@ std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
 }
 
 std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index parent, int target_res) {
-    typedef bg::model::d2::point_xy<double> point_type;
-    typedef bg::model::polygon<point_type> polygon_type;
-    typedef bg::model::multi_polygon<polygon_type> multi_polygon_type;
-    
     std::set<int> all_faces = {1, 2, 3, 4, 5, 6};
     auto boundary_children = children_on_boundary_faces(parent, target_res, all_faces);
     
@@ -337,25 +381,19 @@ std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index paren
         merged = union_result;
     }
     
-    // Extract exterior ring
-    std::vector<std::pair<double, double>> result;
-    if (!merged.empty()) {
-        for (const auto& pt : merged[0].outer()) {
-            result.emplace_back(pt.x(), pt.y());
-        }
-    }
-    return result;
+    // Extract exterior ring of the largest polygon
+    const polygon_type* largest = largest_by_area(merged);
+    return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
 }
 
 std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, double buffer_meters) {
-    typedef bg::model::d2::point_xy<double> point_type;
-    typedef bg::model::polygon<point_type> polygon_type;
-    typedef bg::model::multi_polygon<polygon_type> multi_polygon_type;
-    
     // Get cell boundary
     CellBoundary cb;
     cellToBoundary(cell, &cb);
-    
+    if (cb.numVerts == 0) {
+        return {};
+    }
+
     polygon_type poly;
     double lat_sum = 0.0;
     for (int i = 0; i < cb.numVerts; ++i) {
@@ -398,15 +436,10 @@ std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, dou
     bg::strategy::buffer::side_straight side_strategy;
     
     bg::buffer(poly, buffered, distance_strategy, side_strategy, join_strategy, end_strategy, point_strategy);
-    
+
     // Extract result
-    std::vector<std::pair<double, double>> result;
-    if (!buffered.empty()) {
-        for (const auto& pt : buffered[0].outer()) {
-            result.emplace_back(pt.x(), pt.y());
-        }
-    }
-    return result;
+    const polygon_type* largest = largest_by_area(buffered);
+    return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
 }
 
 std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
@@ -430,20 +463,10 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     auto boundary_children = children_on_boundary_faces(cell, intermediate_res, all_faces);
     
     if (boundary_children.empty()) {
-        // Fallback: return cell boundary directly
-        CellBoundary cb;
-        cellToBoundary(cell, &cb);
-        std::vector<std::pair<double, double>> result;
-        for (int i = 0; i < cb.numVerts; ++i) {
-            result.emplace_back(radsToDegs(cb.verts[i].lng), radsToDegs(cb.verts[i].lat));
-        }
-        return result;
+        // Fallback: return cell boundary directly (closed ring)
+        return cell_boundary(cell);
     }
-    
-    typedef bg::model::d2::point_xy<double> point_type;
-    typedef bg::model::polygon<point_type> polygon_type;
-    typedef bg::model::multi_polygon<polygon_type> multi_polygon_type;
-    
+
     double lat_sum = 0.0;
     int point_count = 0;
     polygon_type base_polygon;
@@ -498,9 +521,10 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
             merged = union_result;
         }
         
-        // Take the first polygon from the multi_polygon
-        if (!merged.empty()) {
-            base_polygon = merged[0];
+        // Take the largest polygon from the multi_polygon
+        const polygon_type* largest = largest_by_area(merged);
+        if (largest) {
+            base_polygon = *largest;
         }
     }
     
@@ -536,16 +560,10 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     bg::strategy::buffer::side_straight side_strategy;
     
     bg::buffer(base_polygon, buffered, distance_strategy, side_strategy, join_strategy, end_strategy, point_strategy);
-    
+
     // Extract result
-    std::vector<std::pair<double, double>> result;
-    if (!buffered.empty()) {
-        for (const auto& pt : buffered[0].outer()) {
-            result.emplace_back(pt.x(), pt.y());
-        }
-    }
-    
-    return result;
+    const polygon_type* largest = largest_by_area(buffered);
+    return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
 }
 
 } // namespace h3_toolkit

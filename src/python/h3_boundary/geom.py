@@ -16,11 +16,13 @@ libraries like Folium, Leaflet, or Mapbox.
 
 Note: For better performance, use the C++ versions (*_cpp suffix) when available.
 """
+import warnings
+
 import h3
 import geojson
 from math import cos, radians
-from typing import Set, Dict, Any, List, Tuple
-from shapely.geometry import Polygon, shape
+from typing import Set, Dict, Any
+from shapely.geometry import Polygon
 
 # Import from package level to use C++ binding when available
 def _get_children_on_boundary_faces():
@@ -117,17 +119,23 @@ def cell_boundary_from_children(parent: str, target_res: int) -> Dict[str, Any]:
     # Use H3's native function - MUCH faster than Shapely unary_union
     try:
         h3_shape = h3.cells_to_h3shape(boundary_children)
-        
-        # Convert H3Shape to GeoJSON coordinates
-        # h3_shape is a LatLngMultiPoly or LatLngPoly
-        polygons = list(h3_shape)  # Get list of LatLngPoly
+
+        # Convert H3Shape to a list of LatLngPoly: cells_to_h3shape returns a
+        # bare LatLngPoly (not iterable) when the union is a single polygon
+        if isinstance(h3_shape, h3.LatLngPoly):
+            polygons = [h3_shape]
+        else:
+            polygons = list(h3_shape)
         
         if not polygons:
             return cell_boundary_to_geojson(parent)
         
-        # Take the largest polygon (outer boundary)
+        # Take the largest polygon by area (matches the C++ backend)
         # Each LatLngPoly has .outer which is the outer ring
-        largest = max(polygons, key=lambda p: len(p.outer))
+        largest = max(
+            polygons,
+            key=lambda p: Polygon([(pt[1], pt[0]) for pt in p.outer]).area,
+        )
         
         # Convert to GeoJSON format [[lon, lat], ...]
         geojson_coords = [[pt[1], pt[0]] for pt in largest.outer]
@@ -144,8 +152,14 @@ def cell_boundary_from_children(parent: str, target_res: int) -> Dict[str, Any]:
             }
         )
         
-    except Exception:
-        # Fallback to Shapely if H3 method fails
+    except Exception as e:
+        # Fallback to Shapely if H3 method fails — warn so the ~10x slowdown
+        # doesn't go unnoticed
+        warnings.warn(
+            f"h3.cells_to_h3shape failed ({e!r}); falling back to slower Shapely union",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         from shapely.ops import unary_union
         
         polygons = []
@@ -206,8 +220,9 @@ def get_buffered_h3_polygon(cell: str, buffer_meters: float = None) -> Dict[str,
     
     poly = Polygon(coords)
     
-    # Convert buffer from meters to degrees (approximate)
-    lat = boundary[0][0]
+    # Convert buffer from meters to degrees (approximate); use the average
+    # vertex latitude as reference (matches the C++ backend)
+    lat = sum(pt[0] for pt in boundary) / len(boundary)
     meters_per_degree_lat = 111320
     meters_per_degree_lon = 111320 * abs(cos(radians(lat)))
     

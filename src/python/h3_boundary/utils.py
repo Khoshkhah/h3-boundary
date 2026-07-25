@@ -201,7 +201,9 @@ def children_on_boundary_faces(
     """
     res_parent = h3.get_resolution(parent)
     if target_res < res_parent:
-        raise ValueError("target_res must be greater than parent cell resolution.")
+        raise ValueError("target_res must be greater than or equal to parent cell resolution.")
+    if target_res > 15:
+        raise ValueError("target_res must be <= 15.")
 
     def _children_by_face(current: str, res: int, faces: Set[int]) -> List[str]:
         if res == target_res:

@@ -1,17 +1,11 @@
 """
 Parity tests: the C++ backend must match the pure-Python reference implementation.
 
-Written BEFORE the divergence fixes (plan Phase 3). These tests encode the
-*intended* common semantics, so several are expected to FAIL against the
-current code — each such test notes its known bug:
-
-- pentagon parents: C++ has no reversed pentagon table and indexes hex tables
-  by raw index digit instead of child position (off-by-one on pentagons)
-- target_res == parent_res: Python returns [parent], C++ throws
-- target_res > 15: neither backend validates (both should raise ValueError)
-- trace functions: C++ bindings declare no defaults for input_faces/res_parent
-- use_convex_hull default: True in the raw binding, False in the wrapper
-- polygon selection: C++ returns merged[0] (arbitrary), not the largest polygon
+These tests encode the shared semantics of both backends and exist to stop
+them from drifting apart again. Historical divergences they caught (and that
+must stay fixed): pentagon digit-vs-position table indexing, equal-resolution
+and target_res > 15 validation, missing binding defaults, the use_convex_hull
+default mismatch, and arbitrary-vs-largest polygon selection from unions.
 """
 import h3
 import pytest
@@ -85,7 +79,7 @@ def test_children_parity_pentagon_all_faces(parent, target_res):
 
 @pytest.mark.parametrize("faces", [{1}, {3}, {2, 5}])
 def test_children_parity_pentagon_partial_faces(faces):
-    # KNOWN BUG (red until Phase 3): C++ indexes the hex reversed table by raw
+    # Guards a fixed divergence: formerly C++ indexes the hex reversed table by raw
     # index digit on pentagon parents instead of the pentagon table by child
     # position, so partial face sets select different children.
     py_result = set(py_utils.children_on_boundary_faces(PENT_RES0, 2, faces))
@@ -108,14 +102,14 @@ def test_children_ground_truth():
 
 
 def test_children_equal_resolution_returns_parent():
-    # KNOWN BUG (red until Phase 3): C++ throws on target_res == parent res;
+    # Guards a fixed divergence: formerly C++ throws on target_res == parent res;
     # the Python reference returns [parent].
     assert py_utils.children_on_boundary_faces(SF_RES6, 6) == [SF_RES6]
     assert cpp.children_on_boundary_faces(SF_RES6, 6) == [SF_RES6]
 
 
 def test_children_target_res_above_15_raises():
-    # KNOWN BUG (red until Phase 3): neither backend validates the upper bound
+    # Guards a fixed divergence: formerly neither backend validates the upper bound
     # today; both must raise ValueError instead of producing garbage.
     with pytest.raises(ValueError):
         py_utils.children_on_boundary_faces(SF_RES6, 16)
@@ -140,7 +134,7 @@ HEX_CHILD_OF_PENT = next(
 TRACE_CELLS = [
     h3.latlng_to_cell(37.7759, -122.4180, 9),
     h3.latlng_to_cell(59.33, 18.06, 7),  # Stockholm
-    # KNOWN BUG (red until Phase 3): C++ indexes the forward pentagon table by
+    # Guards a fixed divergence: formerly C++ indexes the forward pentagon table by
     # raw digit, Python by child position — traces through a pentagon diverge.
     HEX_CHILD_OF_PENT,
     next(c for c in h3.cell_to_children(HEX_CHILD_OF_PENT, 3)
@@ -170,7 +164,7 @@ def test_coarsest_ancestor_parity(cell):
 
 
 def test_trace_functions_defaults():
-    # KNOWN BUG (red until Phase 3): the C++ bindings declare no defaults for
+    # Guards a fixed divergence: formerly the C++ bindings declare no defaults for
     # input_faces/res_parent, so the same call raises TypeError on the compiled
     # backend only.
     cell = TRACE_CELLS[0]
@@ -228,7 +222,7 @@ def test_buffered_boundary_rings_closed():
 
 
 def test_use_convex_hull_default_is_accurate():
-    # KNOWN BUG (red until Phase 3): raw binding defaults to use_convex_hull=True
+    # Guards a fixed divergence: formerly raw binding defaults to use_convex_hull=True
     # while the documented wrapper default is False (accurate union).
     default = Polygon(ring_of(cpp.get_buffered_boundary_polygon(SF_RES6, 9, -1.0)))
     accurate = Polygon(ring_of(cpp.get_buffered_boundary_polygon(SF_RES6, 9, -1.0, False)))

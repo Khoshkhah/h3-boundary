@@ -67,14 +67,14 @@ std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, dou
  * @param cell H3 cell index.
  * @param intermediate_res Resolution for initial boundary computation (default: 10).
  * @param buffer_meters Buffer distance in meters. If < 0, auto-calculates as 100% of intermediate edge length.
- * @param use_convex_hull If true, use fast convex hull. If false, union cells for accurate boundary.
+ * @param use_convex_hull If true, use fast convex hull. If false (default), union cells for accurate boundary.
  * @return Vector of (longitude, latitude) pairs representing the buffered polygon vertices.
  */
 std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     H3Index cell,
     int intermediate_res = 10,
     double buffer_meters = -1.0,
-    bool use_convex_hull = true
+    bool use_convex_hull = false
 );
 
 } // namespace h3_toolkit
