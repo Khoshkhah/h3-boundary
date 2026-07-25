@@ -22,11 +22,11 @@ import h3
 import numpy as np
 
 from h3_boundary import _h3_boundary_cpp as cpp
-from h3_boundary.utils import _mapped_faces
+from h3_boundary import boundary_cell_ids as cpp_bulk_ids
+from h3_boundary.utils import _mapped_faces, _boundary_child_ints
 from h3_boundary.utils import boundary_cell_at
 from h3_boundary.utils import boundary_cell_ids as bulk_numpy
 from h3_boundary.utils import children_on_boundary_faces as trav_py
-from h3_boundary.utils import children_on_boundary_faces_ids as trav_py_ids
 
 WORKERS = min(6, os.cpu_count() or 1)
 
@@ -130,11 +130,13 @@ def main():
             ("ordered", "unranking loop, C++",
              *t(lambda: [cpp.boundary_range_ids(parent, target, i, i + 1)[0]
                          for i in range(total)], 1)),
-            ("ordered", "recursive descent, Python",
-             *t(lambda: trav_py_ids(parent, target), reps)),
-            ("ordered", "recursive descent, C++",
-             *t(lambda: cpp.children_on_boundary_faces_ids(parent, target), reps)),
-            ("ordered", f"recursive descent, C++ x{WORKERS} threads",
+            ("ordered", "recursive descent -> ids, Python",
+             *t(lambda: np.array(_boundary_child_ints(parent, target), dtype=np.uint64), reps)),
+            ("ordered", "recursive descent -> hex, C++",
+             *t(lambda: cpp.children_on_boundary_faces(parent, target), reps)),
+            ("ordered", "bulk + sort -> ids, C++",
+             *t(lambda: cpp_bulk_ids(parent, target, sort=True), reps)),
+            ("ordered", f"index shards -> ids, C++ x{WORKERS} threads",
              *t(lambda: ordered_cpp_threads(parent, target, total), reps)),
             ("unordered", "level expansion, NumPy",
              *t(lambda: bulk_numpy(parent, target), reps)),

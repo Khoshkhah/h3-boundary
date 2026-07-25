@@ -59,6 +59,13 @@ cell = '86283082fffffff'  # Resolution 6 cell
 children = h3b.children_on_boundary_faces(cell, 10)
 print(f"Found {len(children)} boundary children")
 
+# …or as a NumPy uint64 array — much faster for large boundaries
+ids = h3b.boundary_cell_ids(cell, 10)                # unordered
+ids = h3b.boundary_cell_ids(cell, 10, sort=True)     # traversal order
+
+# Reach one cell directly, without generating the rest (O(depth))
+h3b.boundary_cell_at(cell, 10, 100)
+
 # Buffered polygon guaranteed to contain all res-15 children
 result = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 

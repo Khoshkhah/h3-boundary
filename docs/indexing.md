@@ -261,16 +261,15 @@ That matters here: sorting in C++ with `std::sort` is **3.5× slower** (28 ms ag
 
 And it wins, because expanding levels in bulk and then sorting costs less than descending cell by cell:
 
-| Ordered output | 6,558 cells | 59,046 | 531,438 |
+| Whole boundary, in order | 6,558 cells | 59,046 | 531,438 |
 |---|---|---|---|
-| recursive descent (C++) | 0.13 ms | 1.24 ms | 11.8 ms |
-| **`boundary_cell_ids(sort=True)`** (C++ bulk) | **0.10 ms** | **0.92 ms** | **10.6 ms** |
-| same, NumPy bulk | 0.60 ms | 1.49 ms | 8.3 ms |
-| recursive descent (Python) | 4.20 ms | 36.3 ms | 337 ms |
+| `children_on_boundary_faces` — descent, hex strings | 0.56 ms | 5.8 ms | 57 ms |
+| **`boundary_cell_ids(sort=True)`** — bulk, ids | **0.09 ms** | **0.65 ms** | **8.2 ms** |
+| *(`boundary_cell_ids()` unsorted, for reference)* | *0.02 ms* | *0.11 ms* | *1.4 ms* |
 
-All of them produce identical arrays. Both properties — that the traversal is sorted, and that sorting the bulk output reproduces it — are asserted in the test suite.
+All of them contain the same cells, and the first two are in the same order. Both properties — that the traversal is sorted, and that sorting the bulk output reproduces it — are asserted in the test suite.
 
-This is why the ordered id output is not a separate function: it is the same call with `sort=True`, and the flag is literally whether that one `numpy.sort` runs.
+Two costs separate the rows: hex strings (a `format()` per cell) and the sort. Note the sort is the *larger* of the two here, which is why it is opt-in rather than always applied — and why the ordered output is not a separate function, just `sort=True` deciding whether one `numpy.sort` runs.
 
 The recursive descent still has its place: it is the only one that can produce a *slice* (`boundary_range`) without generating everything first, and it streams with O(depth) memory instead of materializing the whole boundary twice.
 

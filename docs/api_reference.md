@@ -131,9 +131,9 @@ Every boundary child as a NumPy array of 64-bit H3 indexes — the fast way to p
 
 | Boundary size | `children_on_boundary_faces` (Python) | (C++) | `boundary_cell_ids(sort=True)` | `boundary_cell_ids()` |
 |---|---|---|---|---|
-| 6,558 | 4.6 ms | 0.69 ms | 0.10 ms | **0.05 ms** |
-| 59,046 | 42 ms | 6.7 ms | 0.92 ms | **0.25 ms** |
-| 531,438 | 382 ms | 66 ms | 10.6 ms | **4.4 ms** |
+| 6,558 | 4.6 ms | 0.56 ms | 0.09 ms | **0.02 ms** |
+| 59,046 | 42 ms | 5.8 ms | 0.65 ms | **0.11 ms** |
+| 531,438 | 382 ms | 57 ms | 8.2 ms | **1.4 ms** |
 
 ```python
 ids = boundary_cell_ids(parent, 13)                # unordered, fastest

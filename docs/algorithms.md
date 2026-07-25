@@ -112,7 +112,7 @@ for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
 
 Two things dominate large calls, and neither is the algorithm:
 
-**Hex strings.** Every cell returned as text costs a `format()`; at half a million cells that is ~80% of the total. `boundary_cell_ids(..., sort=True)` returns the same cells in the same order as a NumPy `uint64` array instead, and runs ~6× faster (66 ms → 10.6 ms at 531,438 cells). The C++ binding fills the array with a single `memcpy`.
+**Hex strings.** Every cell returned as text costs a `format()`; at half a million cells that is ~80% of the total. `boundary_cell_ids(..., sort=True)` returns the same cells in the same order as a NumPy `uint64` array instead, and runs ~7× faster (57 ms → 8.2 ms at 531,438 cells). The C++ binding fills the array with a single `memcpy`.
 
 **Ordering.** See below — dropping it unlocks a bigger win still.
 

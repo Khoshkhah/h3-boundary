@@ -53,6 +53,12 @@ Finds the **lowest resolution** ancestor where `h` still lies on at least one of
 ### `children_on_boundary_faces(parent, target_res, input_faces)`
 Returns all **descendants** at `target_res` that lie on the specified faces of `parent`.
 
+### `boundary_cell_ids(parent, target_res, input_faces, sort=False)`
+The same descendants as a NumPy `uint64` array — the fast path for large boundaries. `sort=True` returns them in traversal order.
+
+### `boundary_cell_at(parent, target_res, n)` / `boundary_rank(parent, cell)`
+Compute the **n-th** boundary cell directly, and recover a cell's position, in O(depth) — without generating the rest. See [Boundary Indexing](indexing.md).
+
 ## Use Cases
 
 1. **Spatial Filtering**: Find all cells along a specific boundary of a region.

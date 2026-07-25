@@ -16,7 +16,10 @@ h3-boundary extends [Uber's H3 library](https://h3geo.org/) with efficient algor
 
 | Function | Description |
 |----------|-------------|
-| `children_on_boundary_faces` | Boundary children of a cell at a target resolution |
+| `children_on_boundary_faces` | Boundary children of a cell, as hex strings |
+| `boundary_cell_ids` | The same cells as a NumPy `uint64` array — the fast path for big boundaries |
+| `boundary_cell_at` / `boundary_rank` | The *n*-th boundary cell directly, and back again, in O(depth) |
+| `boundary_range` | Stream or shard a slice of a boundary |
 | `trace_cell_to_ancestor_faces` | Which ancestor faces a cell touches |
 | `cell_to_coarsest_ancestor_on_faces` | Coarsest ancestor still touching given faces |
 | `cell_boundary_from_children` | Merge boundary children into a single polygon |
@@ -30,9 +33,11 @@ Visit the **[Full Documentation](https://khoshkhah.github.io/h3-toolkit/)** to e
 - **Concepts**: Learn about H3 hierarchy and face mappings
 - **API Reference**: Detailed documentation of all functions
 
-You can also run the demo locally using the provided Jupyter Notebook:
+You can also run the demos locally:
 ```bash
-jupyter notebook notebook/demo_generation.ipynb
+jupyter notebook notebook/demo_generation.ipynb        # boundary tracing & buffering, mapped
+jupyter notebook notebook/boundary_indexing_demo.ipynb # large boundaries: ids, indexing, sharding
+jupyter notebook notebook/buffered_polygon_demo.ipynb  # buffered polygon modes compared
 ```
 
 ## Installation
@@ -81,6 +86,28 @@ buffered = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 print(buffered['properties']['buffer_meters'])
 ```
 
+### Large boundaries
+
+Boundaries grow fast — a resolution-2 cell has 531,438 boundary children at resolution 13 (the closed form is `3**(depth+1) - 3`). Two tools make that practical:
+
+```python
+import h3
+
+big = h3.latlng_to_cell(37.7759, -122.4180, 2)   # 531,438 boundary children at res 13
+
+# The whole set, as 64-bit ids — ~1.4 ms for half a million cells.
+# Skips hex-string formatting, which otherwise dominates.
+ids = h3b.boundary_cell_ids(big, 13)
+ids = h3b.boundary_cell_ids(big, 13, sort=True)   # traversal order, if you need it
+
+# Or reach in without generating anything: O(depth), independent of size
+one    = h3b.boundary_cell_at(big, 13, 265_717)   # the 265,717th cell, in ~0.01 ms
+n      = h3b.boundary_rank(big, one)              # → 265717 (and validates membership)
+window = list(h3b.boundary_range(big, 13, 1000, 1100))   # a 100-cell slice
+```
+
+`boundary_range` also makes sharding trivial — disjoint ranges reassemble into exactly the traversal's output, so workers need no coordination. See [Boundary Indexing](https://khoshkhah.github.io/h3-toolkit/indexing.html) for how this works and [Boundary Algorithms](https://khoshkhah.github.io/h3-toolkit/algorithms.html) for the comparison of approaches.
+
 ### Buffered polygon modes (C++ extension)
 
 ```python
@@ -105,7 +132,17 @@ Measured on a resolution-6 cell with `intermediate_res=10` (Linux, Python 3.14):
 | `get_buffered_boundary_polygon` (fast hull) | — | 0.4 ms |
 | `get_buffered_h3_polygon` | 0.13 ms | 0.06 ms |
 
-The C++ backend shines for face tracing / boundary enumeration and the fast hull mode; for polygon merging the pure-Python path is equally fast because it delegates to H3's native `cells_to_h3shape`. A resolution-2 parent with ~6,500 boundary cells at resolution 9 merges in ~80 ms; ~531,000 boundary cells at resolution 13 in ~11 s.
+The C++ backend shines for face tracing / boundary enumeration and the fast hull mode; for polygon merging the pure-Python path is equally fast because it delegates to H3's native `cells_to_h3shape`.
+
+Producing a whole boundary, where the cell count is what matters:
+
+| Boundary size | `children_on_boundary_faces` (hex) | `boundary_cell_ids(sort=True)` | `boundary_cell_ids()` |
+|---|---|---|---|
+| 6,558 | 0.56 ms | 0.09 ms | **0.02 ms** |
+| 59,046 | 5.8 ms | 0.65 ms | **0.11 ms** |
+| 531,438 | 57 ms | 8.2 ms | **1.4 ms** |
+
+Two things account for the gap: hex strings cost a `format()` per cell (~80% of the time at scale), and unordered output can be produced a whole level at a time with array arithmetic rather than cell by cell. Single-cell access via `boundary_cell_at` is ~0.011 ms regardless of boundary size.
 
 ## How It Works
 
@@ -141,7 +178,7 @@ h3-toolkit/                      # repository (PyPI package: h3-boundary)
 │   ├── python/test_parity.py    # C++ vs Python parity suite
 │   └── cpp/                     # C++ smoke test
 ├── benchmarks/                  # Python + C++ benchmarks
-├── notebook/                    # Jupyter demos
+├── notebook/                    # Jupyter demos (tracing, indexing, buffering)
 └── docs/                        # documentation site
 ```
 
