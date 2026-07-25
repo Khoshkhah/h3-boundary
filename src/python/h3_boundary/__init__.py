@@ -134,7 +134,9 @@ try:
     
     # Additional C++ wrappers
     from ._h3_boundary_cpp import cell_boundary as _cpp_cell_boundary
-    from ._h3_boundary_cpp import cell_boundary_from_children as _cpp_cell_boundary_from_children
+    from ._h3_boundary_cpp import (
+        cell_boundary_from_children_with_count as _cpp_cell_boundary_from_children_with_count,
+    )
     from ._h3_boundary_cpp import get_buffered_h3_polygon as _cpp_get_buffered_h3_polygon
     
     def cell_boundary_to_geojson_cpp(cell: str):
@@ -146,11 +148,7 @@ try:
     
     def cell_boundary_from_children_cpp(parent: str, target_res: int):
         """C++ version of cell_boundary_from_children. Returns GeoJSON Feature."""
-        # Get boundary children count for the property
-        boundary_children = children_on_boundary_faces(parent, target_res)
-        num_cells = len(boundary_children)
-        
-        coords = _cpp_cell_boundary_from_children(parent, target_res)
+        coords, num_cells = _cpp_cell_boundary_from_children_with_count(parent, target_res)
         geojson_coords = [[c[0], c[1]] for c in coords]
         polygon = _geojson.Polygon([geojson_coords])
         return _geojson.Feature(

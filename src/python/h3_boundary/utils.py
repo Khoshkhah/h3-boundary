@@ -205,31 +205,43 @@ def children_on_boundary_faces(
     if target_res > 15:
         raise ValueError("target_res must be <= 15.")
 
-    def _children_by_face(current: str, res: int, faces: Set[int]) -> List[str]:
+    result: List[int] = []
+
+    # The recursion works on integer indexes and generates children
+    # arithmetically (bump the resolution field, set the new digit) instead of
+    # calling into h3 per node — the traversal itself needs no FFI at all.
+    # Only the root can be a pentagon: children that recurse always have a
+    # non-zero digit, and non-center pentagon children are hexagons.
+    def _collect(v: int, res: int, faces: Set[int], is_pent: bool) -> None:
         if res == target_res:
-            return [current]
+            result.append(v)
+            return
 
-        parity = (res + 1) % 2
-        result = []
-        is_pent = h3.is_pentagon(current)
-        
-        mapping_dict = _reversed_boundary_face_mapping_pent if is_pent else _reversed_boundary_face_mapping_hex
-        reverse_mapping = mapping_dict[parity]
+        child_res = res + 1
+        reverse_mapping = (
+            _reversed_boundary_face_mapping_pent if is_pent
+            else _reversed_boundary_face_mapping_hex
+        )[child_res % 2]
 
-        for child in h3.cell_to_children(current, res + 1):
-            child_pos = h3.cell_to_child_pos(child, res)
+        shift = (15 - child_res) * 3
+        # Child with digit 0: resolution field +1, filler 7 at the new digit
+        # position replaced by 0.
+        base = v + (1 << 52) - (7 << shift)
+        # Pentagon children skip digit 1; enumerate() then yields the child
+        # *position*, which is what the tables are keyed by.
+        digits = (0, 2, 3, 4, 5, 6) if is_pent else (0, 1, 2, 3, 4, 5, 6)
 
-            # Get the child face if it matches input_faces via reverse mapping
+        for child_pos, digit in enumerate(digits):
+            child_mapping = reverse_mapping.get(child_pos)
+            if not child_mapping:
+                continue
             mapped_faces = set()
-            # reverse_mapping[child_pos] is a dict {parent_face: {child_faces}}
-            child_mapping = reverse_mapping.get(child_pos, {})
-            
             for parent_face in faces:
-                if parent_face in child_mapping:
-                    mapped_faces.update(child_mapping[parent_face])
-
+                child_faces = child_mapping.get(parent_face)
+                if child_faces:
+                    mapped_faces |= child_faces
             if mapped_faces:
-                result.extend(_children_by_face(child, res + 1, mapped_faces))
-        return result
+                _collect(base + (digit << shift), child_res, mapped_faces, False)
 
-    return _children_by_face(parent, res_parent, input_faces)
+    _collect(int(parent, 16), res_parent, input_faces, h3.is_pentagon(parent))
+    return [format(v, 'x') for v in result]

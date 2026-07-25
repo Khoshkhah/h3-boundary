@@ -21,9 +21,9 @@
  */
 
 #include "h3_toolkit.hpp"
-#include <map>
+#include <array>
+#include <cstdint>
 #include <stdexcept>
-#include <functional>
 #include <cmath>
 
 // Boost.Geometry for polygon buffering and union operations
@@ -48,50 +48,45 @@ namespace h3_toolkit {
  * Structure: parity -> child_pos -> {child_face -> parent_face}
  */
 
-// Map structure: parity -> child_pos -> {child_face -> parent_face}
-// Using simple logic since strict standard maps are bulky to initialize in C++98/03 style, 
-// constructing them inside a function or static initializer is safer.
+// Flat constexpr tables, generated from the reference dicts in
+// src/python/h3_boundary/utils.py (regenerate from there if the mappings
+// ever change — do not hand-edit).
+//
+// Forward:  FWD_*[parity][child_pos][child_face] = parent_face (0 = none)
+// Reversed: REV_*[parity][child_pos][parent_face] = bitmask of child faces,
+//           bit f (1<<f) set means child face f.
 
-static const std::map<int, std::map<int, std::map<int, int>>>& get_hex_mapping() {
-    static std::map<int, std::map<int, std::map<int, int>>> m;
-    if (m.empty()) {
-        // Even resolutions (parity 0)
-        m[0][1] = {{2, 3}, {3, 1}, {1, 1}};
-        m[0][2] = {{4, 6}, {2, 2}, {6, 2}};
-        m[0][3] = {{6, 2}, {2, 3}, {3, 3}};
-        m[0][4] = {{1, 5}, {4, 4}, {5, 4}};
-        m[0][5] = {{1, 5}, {3, 1}, {5, 5}};
-        m[0][6] = {{4, 6}, {5, 4}, {6, 6}};
+static constexpr int8_t FWD_HEX[2][7][7] = {
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 1, 3, 1, 0, 0, 0}, {0, 0, 2, 0, 6, 0, 2}, {0, 0, 3, 3, 0, 0, 2}, {0, 5, 0, 0, 4, 4, 0}, {0, 5, 0, 1, 0, 5, 0}, {0, 0, 0, 0, 6, 4, 6}},
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 3, 0, 3, 0, 1, 0}, {0, 0, 6, 2, 0, 0, 6}, {0, 3, 2, 2, 0, 0, 0}, {0, 0, 0, 0, 5, 5, 4}, {0, 1, 0, 0, 5, 1, 0}, {0, 0, 6, 0, 4, 0, 4}},
+};
+static constexpr int8_t FWD_PENT[2][7][7] = {
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 0, 1, 0, 5, 0, 1}, {0, 0, 2, 2, 0, 0, 1}, {0, 0, 0, 0, 2, 2, 4}, {0, 2, 0, 2, 0, 4, 0}, {0, 0, 0, 0, 5, 3, 5}, {0, 0, 0, 0, 0, 0, 0}},
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 0, 5, 1, 0, 0, 5}, {0, 2, 1, 1, 0, 0, 0}, {0, 4, 0, 0, 3, 3, 0}, {0, 2, 0, 0, 4, 2, 0}, {0, 0, 5, 0, 3, 0, 3}, {0, 0, 0, 0, 0, 0, 0}},
+};
+static constexpr uint8_t REV_HEX[2][7][7] = {
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 10, 0, 4, 0, 0, 0}, {0, 0, 68, 0, 0, 0, 16}, {0, 0, 64, 12, 0, 0, 0}, {0, 0, 0, 0, 48, 2, 0}, {0, 8, 0, 0, 0, 34, 0}, {0, 0, 0, 0, 32, 0, 80}},
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 32, 0, 10, 0, 0, 0}, {0, 0, 8, 0, 0, 0, 68}, {0, 0, 12, 2, 0, 0, 0}, {0, 0, 0, 0, 64, 48, 0}, {0, 34, 0, 0, 0, 16, 0}, {0, 0, 0, 0, 80, 0, 4}},
+};
+static constexpr uint8_t REV_PENT[2][7][7] = {
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 68, 0, 0, 0, 16, 0}, {0, 64, 12, 0, 0, 0, 0}, {0, 0, 0, 48, 2, 0, 0}, {0, 0, 10, 0, 32, 0, 0}, {0, 0, 0, 32, 0, 80, 0}, {0, 0, 0, 0, 0, 0, 0}},
+    {{0, 0, 0, 0, 0, 0, 0}, {0, 8, 0, 0, 0, 68, 0}, {0, 12, 2, 0, 0, 0, 0}, {0, 0, 0, 64, 48, 0, 0}, {0, 0, 34, 0, 16, 0, 0}, {0, 0, 0, 80, 0, 4, 0}, {0, 0, 0, 0, 0, 0, 0}},
+};
 
-        // Odd resolutions (parity 1)
-        m[1][1] = {{3, 3}, {1, 3}, {5, 1}};
-        m[1][2] = {{2, 6}, {6, 6}, {3, 2}};
-        m[1][3] = {{2, 2}, {1, 3}, {3, 2}};
-        m[1][4] = {{4, 5}, {5, 5}, {6, 4}};
-        m[1][5] = {{1, 1}, {4, 5}, {5, 1}};
-        m[1][6] = {{4, 4}, {2, 6}, {6, 4}};
+static inline uint8_t faces_to_mask(const std::set<int>& faces) {
+    uint8_t m = 0;
+    for (int f : faces) {
+        if (f >= 1 && f <= 6) m |= static_cast<uint8_t>(1 << f);
     }
     return m;
 }
 
-static const std::map<int, std::map<int, std::map<int, int>>>& get_pent_mapping() {
-    static std::map<int, std::map<int, std::map<int, int>>> m;
-    if (m.empty()) {
-        // Even resolutions
-        m[0][1] = {{4, 5}, {2, 1}, {6, 1}};
-        m[0][2] = {{6, 1}, {3, 2}, {2, 2}};
-        m[0][3] = {{5, 2}, {4, 2}, {6, 4}};
-        m[0][4] = {{3, 2}, {5, 4}, {1, 2}};
-        m[0][5] = {{5, 3}, {6, 5}, {4, 5}};
-
-        // Odd resolutions
-        m[1][1] = {{2, 5}, {6, 5}, {3, 1}};
-        m[1][2] = {{3, 1}, {2, 1}, {1, 2}};
-        m[1][3] = {{1, 4}, {4, 3}, {5, 3}};
-        m[1][4] = {{1, 2}, {5, 2}, {4, 4}};
-        m[1][5] = {{2, 5}, {4, 3}, {6, 3}};
+static inline std::set<int> mask_to_faces(uint8_t m) {
+    std::set<int> s;
+    for (int f = 1; f <= 6; ++f) {
+        if (m & (1 << f)) s.insert(f);
     }
-    return m;
+    return s;
 }
 
 std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input_faces, int res_parent) {
@@ -107,7 +102,10 @@ std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input
         return {};
     }
 
-    std::set<int> current_faces = input_faces;
+    uint8_t faces = faces_to_mask(input_faces);
+    if (!faces) {
+        return {};
+    }
     H3Index current_h = h;
 
     for (int res = h_res; res > res_parent; --res) {
@@ -121,7 +119,7 @@ std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input
         bool parent_is_pent = isPentagon(parent);
 
         // Index digit for resolution `res`: 3 bits at offset (15 - res) * 3.
-        long long child_pos = (current_h >> ((15 - res) * 3)) & 0x7;
+        int child_pos = static_cast<int>((current_h >> ((15 - res) * 3)) & 0x7);
 
         // The tables are keyed by child *position*. For hexagon parents the
         // digit equals the position; pentagon parents skip digit 1, so the
@@ -134,29 +132,22 @@ std::set<int> trace_cell_to_ancestor_faces(H3Index h, const std::set<int>& input
             return {};
         }
 
-        const auto& mapping = parent_is_pent ? get_pent_mapping() : get_hex_mapping();
-        
-        // Safe access
-        if (mapping.count(parity) && mapping.at(parity).count(child_pos)) {
-            const auto& face_map = mapping.at(parity).at(child_pos);
-            std::set<int> next_faces;
-            for (int f : current_faces) {
-                if (face_map.count(f)) {
-                    next_faces.insert(face_map.at(f));
-                }
+        const int8_t* fwd = parent_is_pent ? FWD_PENT[parity][child_pos]
+                                           : FWD_HEX[parity][child_pos];
+        uint8_t next = 0;
+        for (int f = 1; f <= 6; ++f) {
+            if ((faces & (1 << f)) && fwd[f]) {
+                next |= static_cast<uint8_t>(1 << fwd[f]);
             }
-            if (next_faces.empty()) {
-                return {};
-            }
-            current_faces = next_faces;
-        } else {
+        }
+        if (!next) {
             return {};
         }
-
+        faces = next;
         current_h = parent;
     }
 
-    return current_faces;
+    return mask_to_faces(faces);
 }
 
 std::set<int> trace_cell_to_parent_faces(H3Index h, const std::set<int>& input_faces) {
@@ -187,55 +178,45 @@ H3Index cell_to_coarsest_ancestor_on_faces(H3Index h, const std::set<int>& input
     return current_h;
 }
 
-// Reversed mappings: parity -> child_pos -> {parent_face -> child_faces}
-static const std::map<int, std::map<int, std::map<int, std::set<int>>>>& get_reversed_hex_mapping() {
-    static std::map<int, std::map<int, std::map<int, std::set<int>>>> m;
-    if (m.empty()) {
-        // Even resolutions
-        m[0][1] = {{1, {1, 3}}, {3, {2}}};
-        m[0][2] = {{2, {2, 6}}, {6, {4}}};
-        m[0][3] = {{2, {6}}, {3, {2, 3}}};
-        m[0][4] = {{4, {4, 5}}, {5, {1}}};
-        m[0][5] = {{5, {1, 5}}, {1, {3}}};
-        m[0][6] = {{4, {5}}, {6, {4, 6}}};
-        m[0][0] = {};
-        
-        // Odd resolutions
-        m[1][1] = {{3, {1, 3}}, {1, {5}}};
-        m[1][2] = {{6, {2, 6}}, {2, {3}}};
-        m[1][3] = {{2, {2, 3}}, {3, {1}}};
-        m[1][4] = {{5, {4, 5}}, {4, {6}}};
-        m[1][5] = {{1, {1, 5}}, {5, {4}}};
-        m[1][6] = {{4, {4, 6}}, {6, {2}}};
-        m[1][0] = {};
+static void collect_boundary_children(H3Index current, int res, uint8_t faces,
+                                      int target_res, std::vector<H3Index>& result) {
+    if (res == target_res) {
+        result.push_back(current);
+        return;
     }
-    return m;
-}
 
-// Mirrors _reversed_boundary_face_mapping_pent in utils.py; keyed by child
-// position (pentagon children have positions 0-5).
-static const std::map<int, std::map<int, std::map<int, std::set<int>>>>& get_reversed_pent_mapping() {
-    static std::map<int, std::map<int, std::map<int, std::set<int>>>> m;
-    if (m.empty()) {
-        // Even resolutions
-        m[0][1] = {{1, {2, 6}}, {5, {4}}};
-        m[0][2] = {{1, {6}}, {2, {2, 3}}};
-        m[0][3] = {{4, {1}}, {3, {4, 5}}};
-        m[0][4] = {{4, {5}}, {2, {1, 3}}};
-        m[0][5] = {{5, {4, 6}}, {3, {5}}};
-        m[0][6] = {};
-        m[0][0] = {};
+    int parity = (res + 1) % 2;
+    bool is_pent = isPentagon(current);
+    const uint8_t (&rev)[7][7] = is_pent ? REV_PENT[parity] : REV_HEX[parity];
 
-        // Odd resolutions
-        m[1][1] = {{5, {2, 6}}, {1, {3}}};
-        m[1][2] = {{2, {1}}, {1, {2, 3}}};
-        m[1][3] = {{3, {6}}, {4, {4, 5}}};
-        m[1][4] = {{4, {4}}, {2, {1, 5}}};
-        m[1][5] = {{5, {2}}, {3, {4, 6}}};
-        m[1][6] = {};
-        m[1][0] = {};
+    // One level down there are at most 7 children (6 for pentagons).
+    int64_t num_children = 0;
+    cellToChildrenSize(current, res + 1, &num_children);
+    std::array<H3Index, 7> children{};
+    cellToChildren(current, res + 1, children.data());
+
+    for (int64_t i = 0; i < num_children; ++i) {
+        H3Index child = children[i];
+        if (child == 0) continue;
+
+        // Tables are keyed by child position: equal to the index digit for
+        // hexagon parents; pentagon parents skip digit 1, so position is
+        // digit - 1 (digit 0 stays the center child).
+        int child_pos = static_cast<int>((child >> ((15 - (res + 1)) * 3)) & 0x7);
+        if (is_pent && child_pos > 0) {
+            child_pos -= 1;
+        }
+
+        uint8_t mapped = 0;
+        for (int f = 1; f <= 6; ++f) {
+            if (faces & (1 << f)) {
+                mapped |= rev[child_pos][f];
+            }
+        }
+        if (mapped) {
+            collect_boundary_children(child, res + 1, mapped, target_res, result);
+        }
     }
-    return m;
 }
 
 std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, const std::set<int>& input_faces) {
@@ -248,58 +229,10 @@ std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, 
     }
 
     std::vector<H3Index> result;
-    
-    // Recursive helper using lambda
-    std::function<void(H3Index, int, const std::set<int>&)> traverse;
-    traverse = [&](H3Index current, int res, const std::set<int>& faces) {
-        if (res == target_res) {
-            result.push_back(current);
-            return;
-        }
-        
-        int parity = (res + 1) % 2;
-        bool is_pent = isPentagon(current);
-
-        const auto& reverse_mapping = (is_pent ? get_reversed_pent_mapping()
-                                               : get_reversed_hex_mapping()).at(parity);
-
-        // Get children
-        int64_t num_children;
-        cellToChildrenSize(current, res + 1, &num_children);
-        std::vector<H3Index> children(num_children);
-        cellToChildren(current, res + 1, children.data());
-
-        for (H3Index child : children) {
-            if (child == 0) continue;
-
-            // Tables are keyed by child position: equal to the index digit for
-            // hexagon parents; pentagon parents skip digit 1, so position is
-            // digit - 1 (digit 0 stays the center child).
-            int child_pos = (child >> ((15 - (res + 1)) * 3)) & 0x7;
-            if (is_pent && child_pos > 0) {
-                child_pos -= 1;
-            }
-
-            if (reverse_mapping.count(child_pos) == 0) continue;
-            
-            const auto& child_mapping = reverse_mapping.at(child_pos);
-            std::set<int> mapped_faces;
-            
-            for (int parent_face : faces) {
-                if (child_mapping.count(parent_face)) {
-                    for (int cf : child_mapping.at(parent_face)) {
-                        mapped_faces.insert(cf);
-                    }
-                }
-            }
-            
-            if (!mapped_faces.empty()) {
-                traverse(child, res + 1, mapped_faces);
-            }
-        }
-    };
-    
-    traverse(parent, res_parent, input_faces);
+    uint8_t faces = faces_to_mask(input_faces);
+    if (faces) {
+        collect_boundary_children(parent, res_parent, faces, target_res, result);
+    }
     return result;
 }
 
@@ -331,6 +264,58 @@ static std::vector<std::pair<double, double>> outer_ring(const polygon_type& pol
     return result;
 }
 
+static polygon_type cell_to_polygon(H3Index cell, double* lat_sum, int* pt_count) {
+    CellBoundary cb;
+    cellToBoundary(cell, &cb);
+    polygon_type poly;
+    for (int i = 0; i < cb.numVerts; ++i) {
+        double lon = radsToDegs(cb.verts[i].lng);
+        double lat = radsToDegs(cb.verts[i].lat);
+        bg::append(poly.outer(), point_type(lon, lat));
+        if (lat_sum) {
+            *lat_sum += lat;
+            ++*pt_count;
+        }
+    }
+    // Close the ring
+    if (cb.numVerts > 0) {
+        bg::append(poly.outer(), point_type(radsToDegs(cb.verts[0].lng),
+                                            radsToDegs(cb.verts[0].lat)));
+    }
+    bg::correct(poly);
+    return poly;
+}
+
+// Union all cell polygons via a pairwise merge tree. The naive one-at-a-time
+// union is O(n^2) in accumulated vertices (and copies the accumulated result
+// per cell); merging neighbors pairwise keeps each round linear and the total
+// O(n log n). The input is in DFS order, so adjacent entries are spatially
+// close and unions collapse quickly.
+static multi_polygon_type union_cells(const std::vector<H3Index>& cells,
+                                      double* lat_sum, int* pt_count) {
+    std::vector<multi_polygon_type> parts;
+    parts.reserve(cells.size());
+    for (H3Index c : cells) {
+        multi_polygon_type mp;
+        mp.push_back(cell_to_polygon(c, lat_sum, pt_count));
+        parts.push_back(std::move(mp));
+    }
+    while (parts.size() > 1) {
+        std::vector<multi_polygon_type> next;
+        next.reserve(parts.size() / 2 + 1);
+        for (size_t i = 0; i + 1 < parts.size(); i += 2) {
+            multi_polygon_type u;
+            bg::union_(parts[i], parts[i + 1], u);
+            next.push_back(std::move(u));
+        }
+        if (parts.size() % 2) {
+            next.push_back(std::move(parts.back()));
+        }
+        parts = std::move(next);
+    }
+    return parts.empty() ? multi_polygon_type{} : std::move(parts.front());
+}
+
 std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
     CellBoundary cb;
     cellToBoundary(cell, &cb);
@@ -346,44 +331,23 @@ std::vector<std::pair<double, double>> cell_boundary(H3Index cell) {
     return result;
 }
 
+std::vector<std::pair<double, double>> merged_boundary_of_cells(const std::vector<H3Index>& cells) {
+    if (cells.empty()) {
+        return {};
+    }
+    multi_polygon_type merged = union_cells(cells, nullptr, nullptr);
+    const polygon_type* largest = largest_by_area(merged);
+    return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
+}
+
 std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index parent, int target_res) {
     std::set<int> all_faces = {1, 2, 3, 4, 5, 6};
     auto boundary_children = children_on_boundary_faces(parent, target_res, all_faces);
-    
+
     if (boundary_children.empty()) {
         return cell_boundary(parent);
     }
-    
-    // Union all child cell polygons
-    multi_polygon_type merged;
-    
-    for (H3Index child : boundary_children) {
-        CellBoundary cb;
-        cellToBoundary(child, &cb);
-        
-        polygon_type cell_poly;
-        for (int i = 0; i < cb.numVerts; ++i) {
-            double lon = radsToDegs(cb.verts[i].lng);
-            double lat = radsToDegs(cb.verts[i].lat);
-            bg::append(cell_poly.outer(), point_type(lon, lat));
-        }
-        // Close the ring
-        if (cb.numVerts > 0) {
-            bg::append(cell_poly.outer(), point_type(
-                radsToDegs(cb.verts[0].lng),
-                radsToDegs(cb.verts[0].lat)
-            ));
-        }
-        bg::correct(cell_poly);
-        
-        multi_polygon_type union_result;
-        bg::union_(merged, cell_poly, union_result);
-        merged = union_result;
-    }
-    
-    // Extract exterior ring of the largest polygon
-    const polygon_type* largest = largest_by_area(merged);
-    return largest ? outer_ring(*largest) : std::vector<std::pair<double, double>>{};
+    return merged_boundary_of_cells(boundary_children);
 }
 
 std::vector<std::pair<double, double>> get_buffered_h3_polygon(H3Index cell, double buffer_meters) {
@@ -491,36 +455,8 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
         bg::convex_hull(all_points, base_polygon);
     } else {
         // Accurate mode: union all cell polygons
-        multi_polygon_type merged;
-        
-        for (H3Index child : boundary_children) {
-            CellBoundary cb;
-            cellToBoundary(child, &cb);
-            
-            // Create polygon for this cell
-            polygon_type cell_poly;
-            for (int i = 0; i < cb.numVerts; ++i) {
-                double lon = radsToDegs(cb.verts[i].lng);
-                double lat = radsToDegs(cb.verts[i].lat);
-                bg::append(cell_poly.outer(), point_type(lon, lat));
-                lat_sum += lat;
-                ++point_count;
-            }
-            // Close the ring
-            if (cb.numVerts > 0) {
-                bg::append(cell_poly.outer(), point_type(
-                    radsToDegs(cb.verts[0].lng), 
-                    radsToDegs(cb.verts[0].lat)
-                ));
-            }
-            bg::correct(cell_poly);
-            
-            // Union with merged result
-            multi_polygon_type union_result;
-            bg::union_(merged, cell_poly, union_result);
-            merged = union_result;
-        }
-        
+        multi_polygon_type merged = union_cells(boundary_children, &lat_sum, &point_count);
+
         // Take the largest polygon from the multi_polygon
         const polygon_type* largest = largest_by_area(merged);
         if (largest) {

@@ -53,6 +53,12 @@ std::vector<std::pair<double, double>> cell_boundary(H3Index cell);
 std::vector<std::pair<double, double>> cell_boundary_from_children(H3Index parent, int target_res);
 
 /**
+ * Unions the given cells and returns the exterior ring of the largest
+ * resulting polygon as (lon, lat) pairs. Empty input yields an empty vector.
+ */
+std::vector<std::pair<double, double>> merged_boundary_of_cells(const std::vector<H3Index>& cells);
+
+/**
  * Returns a buffered polygon of a single cell (simple buffer, no children).
  * @param cell H3 cell index
  * @param buffer_meters Buffer distance in meters. If < 0, auto-calculates.
