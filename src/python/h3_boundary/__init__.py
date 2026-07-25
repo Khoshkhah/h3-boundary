@@ -69,6 +69,10 @@ except ImportError:
     )
     _BACKEND = "python"
 
+# Direct boundary indexing (pure Python, backend-independent): random access
+# to the n-th boundary child and its inverse, in O(depth) arithmetic.
+from .utils import boundary_cell_at, boundary_rank
+
 # Pure Python geometry implementations (use Shapely)
 from .geom import (
     cell_boundary_to_geojson,
@@ -253,6 +257,9 @@ __all__ = [
     "trace_cell_to_parent_faces",
     "children_on_boundary_faces",
     "cell_to_coarsest_ancestor_on_faces",
+    # Direct boundary indexing (pure Python)
+    "boundary_cell_at",
+    "boundary_rank",
     # Geometry (pure Python / Shapely)
     "cell_boundary_to_geojson",
     "get_boundary_cells",

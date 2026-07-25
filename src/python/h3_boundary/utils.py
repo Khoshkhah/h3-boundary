@@ -306,3 +306,182 @@ def children_on_boundary_faces(
 
     _collect(int(parent, 16), res_parent, input_faces, h3.is_pentagon(parent))
     return [format(v, 'x') for v in result]
+
+
+# =============================================================================
+# Direct indexing of boundary children (rank / unrank)
+# =============================================================================
+# The boundary children form a positional numeral system: each cell is a
+# base-7 digit string accepted by the face-state automaton whose transitions
+# are the reversed tables above. Counting accepted suffixes per state lets us
+# jump straight to the n-th boundary cell (and back) in O(depth) arithmetic,
+# with no traversal — random access, sampling, and sharding over boundaries
+# that are far too large to enumerate.
+
+_HEX_DIGITS = (0, 1, 2, 3, 4, 5, 6)
+_PENT_DIGITS = (0, 2, 3, 4, 5, 6)
+
+# (faces, remaining_depth, child_parity, is_pent) -> count of boundary
+# descendants. Bounded: ~dozens of reachable face-sets x 15 depths x 2 x 2.
+_SUBTREE_COUNTS: Dict = {}
+
+
+def _mapped_faces(faces: frozenset, parity: int, child_pos: int, is_pent: bool) -> frozenset:
+    """Faces of the child at `child_pos` that lie on the traced boundary."""
+    table = (
+        _reversed_boundary_face_mapping_pent if is_pent
+        else _reversed_boundary_face_mapping_hex
+    )[parity]
+    child_mapping = table.get(child_pos)
+    if not child_mapping:
+        return frozenset()
+    out = set()
+    for f in faces:
+        child_faces = child_mapping.get(f)
+        if child_faces:
+            out |= child_faces
+    return frozenset(out)
+
+
+def _subtree_count(faces: frozenset, res: int, target_res: int, is_pent: bool) -> int:
+    """Number of boundary descendants at target_res below a cell at `res`
+    whose boundary state is `faces`."""
+    if res == target_res:
+        return 1
+    parity = (res + 1) % 2
+    key = (faces, target_res - res, parity, is_pent)
+    count = _SUBTREE_COUNTS.get(key)
+    if count is None:
+        count = 0
+        digits = _PENT_DIGITS if is_pent else _HEX_DIGITS
+        for child_pos in range(len(digits)):
+            mapped = _mapped_faces(faces, parity, child_pos, is_pent)
+            if mapped:
+                count += _subtree_count(mapped, res + 1, target_res, False)
+        _SUBTREE_COUNTS[key] = count
+    return count
+
+
+def boundary_cell_at(
+    parent: str,
+    target_res: int,
+    n: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+) -> str:
+    """
+    Returns the n-th boundary child directly, without enumerating the others.
+
+    Equivalent to ``children_on_boundary_faces(parent, target_res,
+    input_faces)[n]`` but computed in O(target_res - parent_res) arithmetic,
+    so it works on boundaries far too large to materialize. Together with
+    :func:`boundary_rank` it forms a bijection between ``range(count)`` and
+    the boundary cells, in depth-first traversal order.
+
+    Args:
+        parent: Parent H3 cell index (hex string).
+        target_res: Resolution of the boundary children
+            (parent resolution <= target_res <= 15).
+        n: Zero-based index into the boundary sequence.
+        input_faces: Parent face numbers {1-6} to cover; defaults to all six.
+
+    Returns:
+        H3 index (hex string) of boundary child number `n`.
+
+    Raises:
+        ValueError: If `target_res` is out of range.
+        IndexError: If `n` is outside ``range(count)``.
+    """
+    res_parent = h3.get_resolution(parent)
+    if target_res < res_parent:
+        raise ValueError("target_res must be greater than or equal to parent cell resolution.")
+    if target_res > 15:
+        raise ValueError("target_res must be <= 15.")
+
+    faces = frozenset(input_faces)
+    is_pent = h3.is_pentagon(parent)
+    total = _subtree_count(faces, res_parent, target_res, is_pent) if faces else 0
+    if not 0 <= n < total:
+        raise IndexError(f"boundary index {n} out of range for {total} boundary cells")
+
+    v = int(parent, 16)
+    for res in range(res_parent, target_res):
+        child_res = res + 1
+        parity = child_res % 2
+        shift = (15 - child_res) * 3
+        base = v + (1 << 52) - (7 << shift)
+        digits = _PENT_DIGITS if is_pent else _HEX_DIGITS
+        for child_pos, digit in enumerate(digits):
+            mapped = _mapped_faces(faces, parity, child_pos, is_pent)
+            if not mapped:
+                continue
+            count = _subtree_count(mapped, child_res, target_res, False)
+            if n < count:
+                v = base + (digit << shift)
+                faces = mapped
+                is_pent = False
+                break
+            n -= count
+    return format(v, 'x')
+
+
+def boundary_rank(
+    parent: str,
+    cell: str,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+) -> int:
+    """
+    Inverse of :func:`boundary_cell_at`: the position of `cell` in the
+    boundary sequence of `parent` at the cell's resolution.
+
+    Also serves as an O(depth) membership test — raises if the cell is not
+    on the traced boundary at all.
+
+    Args:
+        parent: Parent H3 cell index (hex string).
+        cell: A descendant of `parent` (hex string).
+        input_faces: Parent face numbers {1-6}; must match the value used
+            with boundary_cell_at / children_on_boundary_faces.
+
+    Returns:
+        Zero-based index n such that
+        ``boundary_cell_at(parent, res(cell), n, input_faces) == cell``.
+
+    Raises:
+        ValueError: If `cell` is not a descendant of `parent`, or is not on
+            the traced boundary.
+    """
+    res_parent = h3.get_resolution(parent)
+    target_res = h3.get_resolution(cell)
+    if target_res < res_parent:
+        raise ValueError("cell resolution must be >= parent resolution.")
+
+    v_cell = int(cell, 16)
+    digit_mask = (1 << (3 * (15 - res_parent))) - 1
+    ancestor = ((v_cell | digit_mask) & ~(0xF << 52)) | (res_parent << 52)
+    if ancestor != int(parent, 16):
+        raise ValueError(f"{cell} is not a descendant of {parent}")
+
+    faces = frozenset(input_faces)
+    is_pent = h3.is_pentagon(parent)
+    rank = 0
+    for res in range(res_parent, target_res):
+        child_res = res + 1
+        parity = child_res % 2
+        shift = (15 - child_res) * 3
+        cell_digit = (v_cell >> shift) & 0x7
+        digits = _PENT_DIGITS if is_pent else _HEX_DIGITS
+        descended = False
+        for child_pos, digit in enumerate(digits):
+            mapped = _mapped_faces(faces, parity, child_pos, is_pent)
+            if digit == cell_digit:
+                if not mapped:
+                    raise ValueError(f"{cell} is not on the traced boundary of {parent}")
+                faces = mapped
+                descended = True
+                break
+            if mapped:
+                rank += _subtree_count(mapped, child_res, target_res, False)
+        if not descended:
+            raise ValueError(f"{cell} is not on the traced boundary of {parent}")
+        is_pent = False
+    return rank

@@ -114,6 +114,38 @@ Finds the coarsest ancestor (lowest resolution) where the cell still lies on at 
 
 ---
 
+### `boundary_cell_at`
+
+```python
+boundary_cell_at(
+    parent: str,
+    target_res: int,
+    n: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
+) -> str
+```
+
+Returns the n-th boundary child **directly**, in O(depth) arithmetic — equivalent to `children_on_boundary_faces(parent, target_res)[n]` without enumerating the others. The boundary children form a positional numeral system (their index digits are the paths of a face-state automaton), which makes random access, sampling, and sharding possible on boundaries far too large to materialize. The boundary size is `3**(depth+1) - 3` for hexagon parents and `5 * (3**depth - 1) // 2` for pentagons.
+
+```python
+parent = h3.latlng_to_cell(37.77, -122.42, 2)
+cell = boundary_cell_at(parent, 13, 265_717)   # one of 531,438 — no enumeration
+```
+
+**Raises:** `ValueError` for an out-of-range `target_res`, `IndexError` for `n` outside the boundary count.
+
+### `boundary_rank`
+
+```python
+boundary_rank(parent: str, cell: str, input_faces: Set[int] = {1, 2, 3, 4, 5, 6}) -> int
+```
+
+Inverse of `boundary_cell_at`: the position of `cell` in the parent's boundary sequence (depth-first traversal order), in O(depth). Doubles as a membership test — raises `ValueError` if `cell` is not a descendant of `parent` or not on the traced boundary.
+
+Both functions are pure Python and backend-independent.
+
+---
+
 ## Geometry Functions
 
 ### Pure Python Functions
