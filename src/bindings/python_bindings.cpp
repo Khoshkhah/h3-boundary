@@ -110,6 +110,21 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
           "Boundary children in traversal order as a NumPy uint64 array "
           "(same cells as children_on_boundary_faces, without hex strings).");
 
+    m.def("boundary_cell_ids",
+          [](const std::string& parent_str, int target_res, const std::set<int>& input_faces) {
+              H3Index parent = string_to_h3(parent_str);
+              std::vector<H3Index> cells;
+              {
+                  py::gil_scoped_release release;
+                  cells = h3_toolkit::boundary_cells_unordered(parent, target_res, input_faces);
+              }
+              return to_id_array(cells);
+          },
+          py::arg("parent"), py::arg("target_res"),
+          py::arg("input_faces") = ALL_FACES,
+          "All boundary children as a NumPy uint64 array, unordered "
+          "(level-at-a-time bulk expansion).");
+
     m.def("boundary_range_ids",
           [](const std::string& parent_str, int target_res, int64_t start,
              int64_t stop, const std::set<int>& input_faces) {

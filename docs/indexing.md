@@ -218,19 +218,39 @@ level k:    state {1,4,5}: [ 12,000 cells ]      state {4,6}: [ 8,000 cells ]
 level k+1:  state {1,3}:   [ 30,000 cells ]      state {5}:   [ 18,000 cells ]
 ```
 
-Every cell in a group has the same state, so it has the same valid digits — one addition over the array replaces one Python step per cell. That is `boundary_cell_ids`.
+Every cell in a group has the same state, so it has the same valid digits — one addition over the whole group replaces one step per cell. That is `boundary_cell_ids`.
 
-| Whole boundary | unranking every *n* | `boundary_cell_ids` | speed-up |
-|---|---|---|---|
-| 240 cells | 1.5 ms | 0.23 ms | 7× |
-| 6,558 cells | 72 ms | 0.79 ms | 91× |
-| 531,438 cells | ~5,800 ms | 1.8 ms | **3,200×** |
+### Every implementation, measured
 
-The price is the order: cells come out grouped by state, not in traversal order. So:
+Both approaches, each written three ways, on the same machine (6 threads):
 
-- **want some cells** → `boundary_cell_at` / `boundary_range`
-- **want all of them, order irrelevant** → `boundary_cell_ids`
-- **want all of them, in order** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
+| Approach | Implementation | 6,558 cells | 59,046 | 531,438 |
+|---|---|---|---|---|
+| ordered | unranking, one call per cell (Python) | 71 ms | 799 ms | 8,696 ms |
+| ordered | unranking, one call per cell (C++) | 78 ms | 888 ms | 9,725 ms |
+| ordered | recursive descent (Python) | 3.9 ms | 40 ms | 357 ms |
+| ordered | recursive descent (C++) | 0.15 ms | 1.3 ms | 13.3 ms |
+| ordered | recursive descent (C++, 6 threads) | 0.53 ms | 0.69 ms | **2.2 ms** |
+| **bulk** | level expansion (NumPy) | 0.50 ms | 0.90 ms | 4.5 ms |
+| **bulk** | level expansion (NumPy, 6 threads) | 2.5 ms | 4.9 ms | 29 ms |
+| **bulk** | level expansion (NumPy, 6 processes) | 3.4 ms | 3.4 ms | 6.5 ms |
+| **bulk** | level expansion (C++) | **0.03 ms** | **0.23 ms** | 2.0 ms |
+| **bulk** | level expansion (C++, 6 threads) | 0.57 ms | 0.72 ms | **1.2 ms** |
+
+Four things this shows:
+
+1. **Unranking in a loop is the wrong tool for bulk work, in any language.** C++ is no faster than Python here (78 ms vs 71 ms) — the cost is one call per cell, not the arithmetic inside it. Use it for *some* cells.
+2. **Bulk beats ordered at every size**, once both are in the same language: 0.03 ms vs 0.15 ms at 6.5k cells, 2.0 ms vs 13.3 ms at half a million. Buckets of cells advancing together beat one recursion step per cell.
+3. **NumPy is the fastest option without a compiler** — within 2× of C++ at large sizes — but its per-operation overhead makes it slower than C++ by 15× when the arrays are small.
+4. **Parallelism pays only for the biggest boundaries.** Below ~100k cells, thread hand-off costs more than the work saved. At 531k it gives 6× on the ordered path (13.3 → 2.2 ms) and 1.6× on bulk (2.0 → 1.2 ms). NumPy gains nothing from threads (it holds the GIL for the bookkeeping between array ops) and needs processes to parallelize at all — the C++ functions release the GIL, so plain threads work.
+
+Reproduce with `python benchmarks/compare_implementations.py`.
+
+### Which to use
+
+- **some cells** → `boundary_cell_at` / `boundary_range`
+- **all of them, order irrelevant** → `boundary_cell_ids` (C++ when built, NumPy otherwise)
+- **all of them, in order** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
 
 ---
 

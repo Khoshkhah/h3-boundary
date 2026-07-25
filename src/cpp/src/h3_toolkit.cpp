@@ -523,6 +523,62 @@ std::vector<H3Index> boundary_range(H3Index parent, int target_res,
     return out;
 }
 
+/// Level-at-a-time expansion: cells bucketed by face state, each bucket
+/// advanced with one pass of adds. No recursion, no per-cell branching on
+/// state — the order is sacrificed for straight-line memory access.
+std::vector<H3Index> boundary_cells_unordered(H3Index parent, int target_res,
+                                              const std::set<int>& input_faces) {
+    int res_parent = getResolution(parent);
+    if (target_res < res_parent) {
+        throw std::invalid_argument("target_res must be greater than or equal to parent cell resolution");
+    }
+    if (target_res > 15) {
+        throw std::invalid_argument("target_res must be <= 15");
+    }
+
+    uint8_t faces = faces_to_mask(input_faces);
+    if (!faces) return {};
+
+    // Bucket per face-state mask; only a few dozen of the 128 are reachable.
+    std::vector<std::vector<H3Index>> groups(128), next(128);
+    groups[faces].push_back(parent);
+
+    const bool root_pent = isPentagon(parent);
+    for (int res = res_parent; res < target_res; ++res) {
+        const int child_res = res + 1;
+        const int parity = child_res % 2;
+        const int shift = (15 - child_res) * 3;
+        // Only the root can be a pentagon; every surviving child is a hexagon.
+        const bool is_pent = root_pent && res == res_parent;
+        const uint8_t (*rev)[7] = is_pent ? REV_PENT[parity] : REV_HEX[parity];
+        const int* digits = is_pent ? PENT_DIGITS : HEX_DIGITS;
+        const int ndigits = is_pent ? 6 : 7;
+        const H3Index bump = (1ULL << 52) - (7ULL << shift);
+
+        for (auto& bucket : next) bucket.clear();
+        for (int m = 0; m < 128; ++m) {
+            const auto& src = groups[m];
+            if (src.empty()) continue;
+            for (int cp = 0; cp < ndigits; ++cp) {
+                uint8_t mapped = map_faces(static_cast<uint8_t>(m), rev, cp);
+                if (!mapped) continue;
+                const H3Index add = bump + (static_cast<H3Index>(digits[cp]) << shift);
+                auto& dst = next[mapped];
+                dst.reserve(dst.size() + src.size());
+                for (H3Index v : src) dst.push_back(v + add);
+            }
+        }
+        groups.swap(next);
+    }
+
+    size_t total = 0;
+    for (const auto& bucket : groups) total += bucket.size();
+    std::vector<H3Index> out;
+    out.reserve(total);
+    for (const auto& bucket : groups) out.insert(out.end(), bucket.begin(), bucket.end());
+    return out;
+}
+
 /// Table-free boundary enumeration by wall-following; see header. Exists to
 /// verify the table-driven traversal with an independent algorithm.
 std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {

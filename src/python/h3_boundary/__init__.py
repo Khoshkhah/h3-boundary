@@ -79,9 +79,9 @@ from .utils import children_on_boundary_faces_ids
 # (_h3_boundary_cpp.boundary_range_ids is the sliced equivalent, left in the
 # extension module since it has no pure-Python counterpart.)
 try:
-    from ._h3_boundary_cpp import children_on_boundary_faces_ids
+    from ._h3_boundary_cpp import children_on_boundary_faces_ids, boundary_cell_ids
 except ImportError:
-    pass  # keep the pure-Python version imported above
+    pass  # keep the pure-Python versions imported above
 
 # boundary_range streams, so it stays a generator with bounded memory; when
 # the extension is present it pulls blocks from C++ instead of stepping the

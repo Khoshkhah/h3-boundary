@@ -40,6 +40,19 @@ std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, 
 H3Index cell_to_coarsest_ancestor_on_faces(H3Index h, const std::set<int>& input_faces = {1,2,3,4,5,6});
 
 /**
+ * All boundary children, unordered — the bulk counterpart of
+ * children_on_boundary_faces. Expands a whole level at a time with cells
+ * bucketed by face state instead of recursing per cell, which trades
+ * traversal order for sequential memory access and no call overhead.
+ * Cells come out grouped by state.
+ */
+std::vector<H3Index> boundary_cells_unordered(
+    H3Index parent,
+    int target_res,
+    const std::set<int>& input_faces = {1,2,3,4,5,6}
+);
+
+/**
  * Table-free alternative to children_on_boundary_faces (all-faces case) used
  * for independent verification: finds one boundary cell near a parent vertex,
  * then floods along the wall, certifying neighbors through a shared outside

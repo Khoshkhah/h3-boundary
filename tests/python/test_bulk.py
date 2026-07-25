@@ -7,11 +7,23 @@ is allowed to differ, nothing else is.
 import h3
 import pytest
 
-from h3_boundary import boundary_cell_ids, children_on_boundary_faces_ids
+from h3_boundary import boundary_cell_ids as boundary_cell_ids_default
+from h3_boundary import children_on_boundary_faces_ids
 from h3_boundary.utils import children_on_boundary_faces
+from h3_boundary.utils import boundary_cell_ids as bulk_py
 from h3_boundary.utils import (
     children_on_boundary_faces_ids as children_ids_py,
 )
+
+# NumPy level-expansion and (when built) the C++ one must agree.
+BULK_IMPLS = [bulk_py]
+if boundary_cell_ids_default is not bulk_py:
+    BULK_IMPLS.append(boundary_cell_ids_default)
+
+
+@pytest.fixture(params=BULK_IMPLS, ids=lambda f: getattr(f, "__module__", "cpp"))
+def boundary_cell_ids(request):
+    return request.param
 
 # When the extension is built the package exports the C++ version; the pure
 # Python one must behave identically.
@@ -46,7 +58,7 @@ def as_hex(ids):
     (PENT_RES0, 4),
     (PENT_RES1, 4),
 ])
-def test_same_cells_as_traversal(parent, target_res):
+def test_same_cells_as_traversal(boundary_cell_ids, parent, target_res):
     ids = boundary_cell_ids(parent, target_res)
     expected = children_on_boundary_faces(parent, target_res)
     assert as_hex(ids) == set(expected)
@@ -88,12 +100,12 @@ def test_ids_validation(children_ids):
 
 
 @pytest.mark.parametrize("faces", [{1}, {3}, {2, 5}, {1, 2, 3}])
-def test_partial_faces(faces):
+def test_partial_faces(boundary_cell_ids, faces):
     ids = boundary_cell_ids(SF_RES6, 9, faces)
     assert as_hex(ids) == set(children_on_boundary_faces(SF_RES6, 9, faces))
 
 
-def test_dtype_and_h3_int_api_compatibility():
+def test_dtype_and_h3_int_api_compatibility(boundary_cell_ids):
     import h3.api.basic_int as h3i
     ids = boundary_cell_ids(SF_RES6, 9)
     assert str(ids.dtype) == "uint64"
@@ -103,30 +115,30 @@ def test_dtype_and_h3_int_api_compatibility():
         assert h3i.get_resolution(int(v)) == 9
 
 
-def test_closed_form_counts():
+def test_closed_form_counts(boundary_cell_ids):
     for depth in range(1, 6):
         assert len(boundary_cell_ids(SF_RES6, 6 + depth)) == 3 ** (depth + 1) - 3
     for depth in range(1, 5):
         assert len(boundary_cell_ids(PENT_RES0, depth)) == 5 * (3 ** depth - 1) // 2
 
 
-def test_large_boundary():
+def test_large_boundary(boundary_cell_ids):
     """531,438 cells — the case the ordered traversal takes ~50x longer on."""
     ids = boundary_cell_ids(SF_RES2, 13)
     assert len(ids) == 3 ** 12 - 3
     assert len(set(ids.tolist())) == len(ids)  # all distinct
 
 
-def test_equal_resolution():
+def test_equal_resolution(boundary_cell_ids):
     ids = boundary_cell_ids(SF_RES6, 6)
     assert as_hex(ids) == {SF_RES6}
 
 
-def test_empty_faces():
+def test_empty_faces(boundary_cell_ids):
     assert len(boundary_cell_ids(SF_RES6, 8, set())) == 0
 
 
-def test_validation_errors():
+def test_validation_errors(boundary_cell_ids):
     with pytest.raises(ValueError):
         boundary_cell_ids(SF_RES6, 5)
     with pytest.raises(ValueError):
