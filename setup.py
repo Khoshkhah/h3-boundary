@@ -1,105 +1,83 @@
 """
-H3-Toolkit setup with optional C++ extension building.
+Build machinery for the optional C++ extension.
+
+All package metadata lives in pyproject.toml; this file only wires the CMake
+build into setuptools. If cmake, Boost, or network access (FetchContent
+downloads the h3 sources) are unavailable, the build degrades gracefully and
+the package installs pure-Python — h3_boundary falls back at import time.
 """
-import os
-import sys
+import shutil
 import subprocess
-from setuptools import setup, find_packages
+import sys
+from pathlib import Path
+
+from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
 
 class CMakeBuild(build_ext):
-    """Custom build command that builds C++ extension via CMake."""
-    
-    def run(self):
-        # Check if cmake is available
+    """Builds _h3_boundary_cpp via CMake instead of the default compiler."""
+
+    def build_extension(self, ext):
+        source_dir = Path(__file__).parent.resolve()
+        build_dir = Path(self.build_temp).resolve()
+        build_dir.mkdir(parents=True, exist_ok=True)
+
+        configure = [
+            "cmake",
+            str(source_dir),
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DH3_BOUNDARY_PIP_BUILD=ON",
+            # PYBIND11_FINDPYTHON forces pybind11's modern FindPython mode;
+            # without it (and the classic PYTHON_EXECUTABLE) pybind11 searches
+            # PATH and can build against the wrong interpreter.
+            "-DPYBIND11_FINDPYTHON=ON",
+            f"-DPython_EXECUTABLE={sys.executable}",
+            f"-DPython3_EXECUTABLE={sys.executable}",
+            f"-DPYTHON_EXECUTABLE={sys.executable}",
+        ]
         try:
-            subprocess.check_output(['cmake', '--version'])
-        except OSError:
-            print("CMake not found. Installing without C++ bindings.")
-            print("For C++ bindings, install cmake and rebuild.")
+            pybind11_dir = subprocess.check_output(
+                [sys.executable, "-m", "pybind11", "--cmakedir"], text=True
+            ).strip()
+            configure.append(f"-Dpybind11_DIR={pybind11_dir}")
+        except (OSError, subprocess.CalledProcessError):
+            pass  # CMake falls back to FetchContent for pybind11
+
+        build = [
+            "cmake", "--build", ".",
+            "--target", "_h3_boundary_cpp",
+            "--config", "Release", "-j",
+        ]
+
+        try:
+            subprocess.check_call(configure, cwd=build_dir)
+            subprocess.check_call(build, cwd=build_dir)
+        except (OSError, subprocess.CalledProcessError) as e:
+            print(f"C++ extension build skipped ({e}); installing pure-Python h3_boundary.")
             return
-        
-        # Build directory
-        build_dir = os.path.join(os.path.dirname(__file__), 'build')
-        os.makedirs(build_dir, exist_ok=True)
-        
-        # Configure
-        cmake_args = [
-            'cmake',
-            '-DCMAKE_BUILD_TYPE=Release',
-            '..'
+
+        built = [
+            p for p in build_dir.glob("_h3_boundary_cpp*")
+            if p.suffix in (".so", ".pyd", ".dylib")
         ]
-        
-        # Build
-        build_args = [
-            'cmake',
-            '--build', '.',
-            '--target', '_h3_boundary_cpp',
-            '--config', 'Release',
-            '-j'
-        ]
-        
-        try:
-            print("Building C++ extension...")
-            subprocess.check_call(cmake_args, cwd=build_dir)
-            subprocess.check_call(build_args, cwd=build_dir)
-            
-            # Copy the built module to the package
-            import glob
-            so_files = glob.glob(os.path.join(build_dir, '_h3_boundary_cpp*.so'))
-            if so_files:
-                import shutil
-                dest = os.path.join(os.path.dirname(__file__), 'src', 'python', 'h3_boundary')
-                for so_file in so_files:
-                    shutil.copy(so_file, dest)
-                    print(f"Installed: {os.path.basename(so_file)}")
-            else:
-                print("Warning: C++ module not found after build.")
-                
-        except subprocess.CalledProcessError as e:
-            print(f"C++ build failed: {e}")
-            print("Installing without C++ bindings.")
+        if not built:
+            print("Warning: C++ extension not found after CMake build; installing pure-Python.")
+            return
+
+        # get_ext_fullpath points into build_lib for regular installs (so the
+        # wheel picks the module up) and into the source tree for editable
+        # installs. Keep CMake's filename — it already has the right ABI tag.
+        dest = Path(self.get_ext_fullpath(ext.name)).parent
+        dest.mkdir(parents=True, exist_ok=True)
+        for f in built:
+            shutil.copy2(f, dest)
+            print(f"Installed C++ extension: {f.name}")
 
 
 setup(
-    name="h3-boundary",
-    version="0.1.0",
-    description="Advanced H3 boundary tracing and geometry utilities",
-    author="H3-Toolkit Contributors",
-    package_dir={"": "src/python"},
-    packages=find_packages(where="src/python"),
-    python_requires=">=3.8",
-    install_requires=[
-        "h3>=4.0.0",
-        "shapely>=2.0.0",
-        "geojson>=3.0.0",
-    ],
-    extras_require={
-        "dev": [
-            "pytest",
-            "pytest-cov",
-            "folium",
-            "jupyter",
-        ],
-    },
-    cmdclass={
-        'build_ext': CMakeBuild,
-    },
-    # Include compiled extensions if they exist
-    package_data={
-        'h3_boundary': ['*.so', '*.pyd', '*.dylib'],
-    },
-    classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: C++",
-    ],
+    # Registering the extension makes setuptools run build_ext and tag wheels
+    # as platform-specific; sources are empty because CMake does the build.
+    ext_modules=[Extension("h3_boundary._h3_boundary_cpp", sources=[])],
+    cmdclass={"build_ext": CMakeBuild},
 )

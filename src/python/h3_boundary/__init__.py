@@ -44,6 +44,10 @@ Author: H3-Toolkit Contributors
 License: MIT
 """
 
+# Bare literal near the top: read via AST by setuptools' dynamic version
+# (tool.setuptools.dynamic in pyproject.toml) without importing the package.
+__version__ = "0.1.0"
+
 # =============================================================================
 # Backend Selection: C++ bindings if available, else pure Python
 # =============================================================================
@@ -187,8 +191,6 @@ try:
         
 except ImportError:
     pass
-
-__version__ = "0.1.0"
 
 def get_backend():
     """Returns the current backend: 'cpp' or 'python'"""

@@ -1,0 +1,9 @@
+include CMakeLists.txt
+include LICENSE
+include README.md
+recursive-include src/cpp *.cpp *.hpp
+recursive-include src/bindings *.cpp
+recursive-include tests *.py *.cpp
+recursive-include benchmarks *.py *.cpp
+global-exclude *.so *.pyd *.dylib *.pyc
+prune src/python/h3_boundary/__pycache__
