@@ -233,7 +233,9 @@ Returns the merged boundary polygon of all boundary children at `target_res`.
 get_buffered_h3_polygon(cell: str, buffer_meters: float = None) -> Dict[str, Any]
 ```
 
-Returns a buffered polygon of the cell's native boundary.
+Returns a buffered polygon of the cell's native boundary — a cheap approximation of where the cell is.
+
+**Not a container:** it buffers the nominal hexagon, which the cell's descendants straddle, so a few percent of them fall outside (measured: 896 of 16,807 at res+5). Use `get_buffered_boundary_polygon` when containment matters. See [Buffered Polygons](buffering.md).
 
 **Parameters:**
 - `cell`: H3 cell index

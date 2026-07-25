@@ -33,8 +33,8 @@ children = h3b.children_on_boundary_faces(cell, target_res)   # just the ring
 | `trace_cell_to_ancestor_faces` | Which ancestor faces a cell touches |
 | `cell_to_coarsest_ancestor_on_faces` | Coarsest ancestor still touching given faces |
 | `cell_boundary_from_children` | Merge boundary children into a single polygon |
-| `get_buffered_boundary_polygon` | Buffered polygon with configurable accuracy |
-| `get_buffered_h3_polygon` | Simple buffered cell polygon |
+| `get_buffered_boundary_polygon` | Buffered polygon that contains every descendant |
+| `get_buffered_h3_polygon` | Cheap approximate outline of one cell (not a container) |
 
 ## Documentation
 
@@ -47,7 +47,7 @@ You can also run the demos locally:
 ```bash
 jupyter notebook notebook/demo_generation.ipynb        # boundary tracing & buffering, mapped
 jupyter notebook notebook/boundary_indexing_demo.ipynb # large boundaries: ids, indexing, sharding
-jupyter notebook notebook/buffered_polygon_demo.ipynb  # buffered polygon modes compared
+jupyter notebook notebook/buffered_polygon_demo.ipynb  # buffering: the three modes and what each contains
 ```
 
 ## Installation
@@ -128,7 +128,9 @@ fast_poly = h3b.get_buffered_boundary_polygon_cpp(cell, 10, use_convex_hull=True
 accurate_poly = h3b.get_buffered_boundary_polygon_cpp(cell, 10)
 ```
 
-All geometry functions exist in two flavors returning identical GeoJSON: plain (pure Python/Shapely, always available) and `*_cpp` (Boost.Geometry, only when the extension compiled — guard with `cpp_geom_available()`).
+All geometry functions exist in two flavors returning identical GeoJSON: plain (pure Python/Shapely, always available) and `*_cpp` (Boost.Geometry, only when the extension compiled — guard with `cpp_geom_available()`). The convex-hull mode is C++-only.
+
+Both boundary-based modes are verified to contain every descendant; `get_buffered_h3_polygon` is not — see [Buffered Polygons](https://khoshkhah.github.io/h3-toolkit/buffering.html).
 
 ## Performance
 

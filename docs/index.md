@@ -15,6 +15,7 @@ H3 cell boundary tracing and buffered polygons across resolution hierarchies, wi
 - [Concepts](concepts.md)
 - [Boundary Algorithms](algorithms.md) — the four approaches, compared
 - [Boundary Indexing](indexing.md) — compute the n-th boundary cell directly
+- [Buffered Polygons](buffering.md) — one polygon that contains a cell and all its descendants
 - [GitHub Repository](https://github.com/Khoshkhah/h3-toolkit)
 
 ## Overview
@@ -92,6 +93,7 @@ Resolution-6 cell, intermediate resolution 10. See the [API Reference](api_refer
 - [Concepts](concepts.md) - How boundary tracing works
 - [Boundary Algorithms](algorithms.md) - Four approaches introduced and benchmarked
 - [Boundary Indexing](indexing.md) - Direct access to the n-th boundary cell, explained from scratch
+- [Buffered Polygons](buffering.md) - The three buffering functions and what each guarantees
 
 ## License
 

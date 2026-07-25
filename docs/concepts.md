@@ -59,6 +59,9 @@ The same descendants as a NumPy `uint64` array — the fast path for large bound
 ### `boundary_cell_at(parent, target_res, n)` / `boundary_rank(parent, cell)`
 Compute the **n-th** boundary cell directly, and recover a cell's position, in O(depth) — without generating the rest. See [Boundary Indexing](indexing.md).
 
+### `get_buffered_boundary_polygon(cell, intermediate_res, buffer_meters)`
+Traces the cell's boundary, merges it and pushes the edges outward, giving one polygon that **contains every descendant** — which the cell's own hexagon does not, since descendants straddle it. `get_buffered_h3_polygon` is a cheaper approximation that does *not* guarantee containment. See [Buffered Polygons](buffering.md).
+
 ## Use Cases
 
 1. **Spatial Filtering**: Find all cells along a specific boundary of a region.
