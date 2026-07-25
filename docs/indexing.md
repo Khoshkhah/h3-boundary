@@ -200,54 +200,37 @@ for cell in boundary_range(parent, target_res, lo, hi):
 | `boundary_rank` | same | 0.011 ms |
 | `boundary_range` (slice) | Δ-step seek + O(1) per cell | 0.025 ms for 100 cells |
 
-Δ is at most 15, so **every** lookup is bounded by roughly 100 arithmetic operations. The boundary's size never enters the cost — 0.011 ms whether it holds 78 cells or 531,438. That flatness is the whole point, and it is what the next section contrasts against.
+Δ is at most 15, so **every** lookup is bounded by roughly 100 arithmetic operations. The boundary's size never enters the cost — 0.011 ms whether it holds 78 cells or 531,438.
 
 ---
 
-## Generating the whole boundary
+## If you want the whole boundary, don't unrank in a loop
 
-Indexing gives you *one* cell fast. Asking it for every cell in turn is the wrong tool — each call re-descends from the parent, so the Δ-step cost is paid N times over. Two better routes exist, and they differ in whether you need the cells **in order**.
+Unranking answers "give me cell *n*". Asking it for every *n* in turn works, but each call starts again from the parent — the Δ-step descent is repeated N times.
 
-### Ordered: let the traversal emit them
-
-`children_on_boundary_faces` walks the same live subtree once, emitting cells as it reaches them. Prefix work is shared between neighbours instead of repeated, so it is hundreds of times faster than the indexing loop. `children_on_boundary_faces_ids` is the same walk returning `uint64` instead of hex strings — text formatting alone is most of the cost at scale.
-
-### Unordered: expand a level at a time
-
-If the order doesn't matter, the same state machine can run in **bulk**. Instead of visiting cells one at a time, group all live cells by their state and expand each group in one array operation:
+When you want every cell and don't need them in order, there is a much better way to use the same state machine: **expand a whole level at once**. Group the live cells by their state, and add the digit to the whole group in one array operation.
 
 ```
-level k:   {1,4,5}: [ 12,000 cells ]   {4,6}: [ 8,000 cells ]   {2}: [ 5,000 cells ]
-                ↓ one vectorized add per surviving digit          ↓
-level k+1: {1,3}:   [ 30,000 cells ]   {5}:   [ 18,000 cells ]   …
+level k:    state {1,4,5}: [ 12,000 cells ]      state {4,6}: [ 8,000 cells ]
+                     │                                  │
+                     │  one array add per valid digit   │
+                     ▼                                  ▼
+level k+1:  state {1,3}:   [ 30,000 cells ]      state {5}:   [ 18,000 cells ]
 ```
 
-Every cell in a group shares the same state, so it shares the same set of valid digits — one addition over the whole array replaces a Python step per cell. About 30 array operations per level replace hundreds of thousands of individual ones. That is `boundary_cell_ids`, and it returns a NumPy `uint64` array with cells grouped by state.
+Every cell in a group has the same state, so it has the same valid digits — one addition over the array replaces one Python step per cell. That is `boundary_cell_ids`.
 
-### Measured
+| Whole boundary | unranking every *n* | `boundary_cell_ids` | speed-up |
+|---|---|---|---|
+| 240 cells | 1.5 ms | 0.23 ms | 7× |
+| 6,558 cells | 72 ms | 0.79 ms | 91× |
+| 531,438 cells | ~5,800 ms | 1.8 ms | **3,200×** |
 
-Same machine, one run. "Descendants" is what brute force would have to touch.
+The price is the order: cells come out grouped by state, not in traversal order. So:
 
-| Method | Order | 240 cells | 6,558 cells | 531,438 cells |
-|---|---|---|---|---|
-| `children_on_boundary_faces_ids` (C++) | yes | **0.01 ms** | **0.20 ms** | 13 ms |
-| `boundary_cell_ids` (bulk) | no | 0.23 ms | 0.79 ms | **1.8 ms** |
-| `boundary_range` (streaming, hex) | yes | 0.03 ms | 0.65 ms | 54 ms |
-| `children_on_boundary_faces` (C++, hex) | yes | 0.02 ms | 0.62 ms | 54 ms |
-| `children_on_boundary_faces` (Python, hex) | yes | 0.15 ms | 4.5 ms | 357 ms |
-| boundary walk (C++) | no | 0.04 ms | 1.4 ms | 190 ms |
-| **`boundary_cell_at` in a loop** | yes | 1.5 ms | 72 ms | ~5,800 ms |
-| brute force | no | 7.8 ms | 3,048 ms | — |
-
-Two things to read off it:
-
-- **The indexing loop is the slowest sane option** — 3,000× behind the ordered traversal at half a million cells. Use indexing for *some* cells, never for all of them.
-- **Bulk wins only when the boundary is big.** Below roughly 50,000 cells the C++ traversal is ahead (NumPy's per-operation overhead dominates when the arrays are small); above it, vectorization takes over and keeps pulling away:
-
-  | Cells | 240 | 2,184 | 6,558 | 59,046 | 177,144 | 531,438 |
-  |---|---|---|---|---|---|---|
-  | C++ ids | **0.01** | **0.05** | **0.14** | 1.40 | 4.81 | 15.4 |
-  | bulk (NumPy) | 0.23 | 0.44 | 0.51 | **1.13** | **3.32** | **2.40** |
+- **want some cells** → `boundary_cell_at` / `boundary_range`
+- **want all of them, order irrelevant** → `boundary_cell_ids`
+- **want all of them, in order** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
 
 ---
 
@@ -261,19 +244,19 @@ boundary_rank(parent, cell, input_faces={1,2,3,4,5,6}) -> int
 boundary_range(parent, target_res, start=0, stop=None, input_faces={1,2,3,4,5,6}) -> Iterator[str]
 ```
 
-For whole boundaries, use these instead:
+For a whole boundary at once:
 
 ```python
-from h3_boundary import children_on_boundary_faces      # ordered, hex strings
-from h3_boundary import children_on_boundary_faces_ids  # ordered, uint64 array
-from h3_boundary import boundary_cell_ids               # unordered, uint64 array
+from h3_boundary import boundary_cell_ids   # unordered, NumPy uint64 array
+
+boundary_cell_ids(parent, target_res, input_faces={1,2,3,4,5,6}) -> numpy.ndarray
 ```
 
 - `input_faces` restricts the traversal to part of the boundary; it must match across calls for ranks to line up.
 - `boundary_cell_at` raises `IndexError` outside `range(count)`; `boundary_rank` raises `ValueError` for non-descendants and interior cells.
 - All three work with or without the C++ extension (`boundary_range` uses it when present).
 
-**Ranks refer to traversal order.** They index the sequence produced by `children_on_boundary_faces` and `children_on_boundary_faces_ids`. `boundary_cell_ids` returns the same cells grouped by state instead, so positions there are unrelated — don't mix the two.
+**Ranks refer to traversal order** — the order `children_on_boundary_faces` returns. `boundary_cell_ids` groups its cells by state instead, so positions in *that* array mean nothing to `boundary_rank`; don't mix the two.
 
 ## How it is verified
 
