@@ -204,11 +204,33 @@ for cell in boundary_range(parent, target_res, lo, hi):
 
 ---
 
-## If you want the whole boundary, don't unrank in a loop
+## Generating the whole boundary: three ways
 
-Unranking answers "give me cell *n*". Asking it for every *n* in turn works, but each call starts again from the parent — the Δ-step descent is repeated N times.
+### 1. Unrank every position (don't)
 
-When you want every cell and don't need them in order, there is a much better way to use the same state machine: **expand a whole level at once**. Group the live cells by their state, and add the digit to the whole group in one array operation.
+Unranking answers "give me cell *n*". Asking it for every *n* in turn works, but each call starts again from the parent, so the Δ-step descent is repeated N times — and nothing is shared between neighbouring cells even though they have almost identical digit strings.
+
+### 2. Recursive descent — ordered
+
+This is what `children_on_boundary_faces` does, and it is the same walk the counting rule is built on, just without the counting. Start at the parent with state {1..6}; for each surviving child, recurse; when you reach the target resolution, emit the cell:
+
+```
+parent {1,2,3,4,5,6}
+├── digit 0 → {}  pruned — the centre child and everything under it
+├── digit 1 → {1,2,3} ──┬── digit 1 → {1,3,5} → … emit
+│                       ├── digit 2 → {3}     → … emit
+│                       ├── digit 3 → {1,2,3} → … emit
+│                       └── digit 5 → {1,5}   → … emit
+├── digit 2 → {2,4,6} ── … (4 survivors each, as the table above says)
+⋮
+└── digit 6 → {4,5,6} ── …
+```
+
+Because the walk goes depth-first, cells come out in a fixed order — and that order *is* the definition of rank. Each cell's digit prefix is built once and shared by everything below it, which is exactly the work the unranking loop repeats. That alone is worth ~500×.
+
+### 3. Level expansion — unordered ("bulk")
+
+If you don't need the order, the same state machine can advance **a whole level at once**. Group the live cells by state, then add the digit to the entire group in one operation:
 
 ```
 level k:    state {1,4,5}: [ 12,000 cells ]      state {4,6}: [ 8,000 cells ]
@@ -218,7 +240,7 @@ level k:    state {1,4,5}: [ 12,000 cells ]      state {4,6}: [ 8,000 cells ]
 level k+1:  state {1,3}:   [ 30,000 cells ]      state {5}:   [ 18,000 cells ]
 ```
 
-Every cell in a group has the same state, so it has the same valid digits — one addition over the whole group replaces one step per cell. That is `boundary_cell_ids`.
+Every cell in a group has the same state, so it has the same valid digits — one addition over the whole group replaces one step per cell. That is `boundary_cell_ids`. The catch is that cells from different branches end up mixed together in the groups, so the traversal order is gone.
 
 ### Every implementation, measured
 
