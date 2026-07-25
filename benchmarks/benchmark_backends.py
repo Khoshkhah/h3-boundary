@@ -10,7 +10,7 @@ TARGET_RES = 15  # Change this to test different resolutions
 
 def benchmark_python(cell_res0, target_res):
     """Run with pure Python backend"""
-    from h3_toolkit.utils import children_on_boundary_faces as py_children
+    from h3_boundary.utils import children_on_boundary_faces as py_children
     
     start = time.perf_counter()
     result = py_children(cell_res0, target_res)
@@ -21,7 +21,7 @@ def benchmark_python(cell_res0, target_res):
 def benchmark_cpp(cell_res0, target_res):
     """Run with C++ backend"""
     try:
-        from h3_toolkit._h3_toolkit_cpp import children_on_boundary_faces as cpp_children
+        from h3_boundary._h3_boundary_cpp import children_on_boundary_faces as cpp_children
     except ImportError as e:
         return None, None, str(e)
     
@@ -62,8 +62,8 @@ def main():
         print("To build C++ bindings:")
         print("  cd ~/projects/h3-toolkit")
         print("  rm -rf build && mkdir build && cd build")
-        print("  cmake .. && make _h3_toolkit_cpp")
-        print("  cp _h3_toolkit_cpp*.so ../src/python/h3_toolkit/")
+        print("  cmake .. && make _h3_boundary_cpp")
+        print("  cp _h3_boundary_cpp*.so ../src/python/h3_boundary/")
     else:
         cpp_count = len(cpp_result)
         print(f"  Count: {cpp_count:,}")

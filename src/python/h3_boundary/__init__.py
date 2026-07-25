@@ -13,7 +13,7 @@ Key Features:
 - GeoJSON-compatible output for easy visualization
 
 Quick Start:
-    >>> import h3_toolkit as h3t
+    >>> import h3_boundary as h3t
     >>> cell = '86283082fffffff'
     >>> 
     >>> # Get boundary children at resolution 10
@@ -49,7 +49,7 @@ License: MIT
 # =============================================================================
 # Try to import C++ bindings first (faster), fall back to pure Python
 try:
-    from ._h3_toolkit_cpp import (
+    from ._h3_boundary_cpp import (
         trace_cell_to_ancestor_faces,
         trace_cell_to_parent_faces,
         children_on_boundary_faces,
@@ -77,7 +77,7 @@ from .geom import (
 # C++ geometry wrapper (returns GeoJSON like Python version)
 _CPP_GEOM_AVAILABLE = False
 try:
-    from ._h3_toolkit_cpp import get_buffered_boundary_polygon as _cpp_buffered_polygon
+    from ._h3_boundary_cpp import get_buffered_boundary_polygon as _cpp_buffered_polygon
     import h3
     import geojson as _geojson
     _CPP_GEOM_AVAILABLE = True
@@ -133,9 +133,9 @@ try:
         )
     
     # Additional C++ wrappers
-    from ._h3_toolkit_cpp import cell_boundary as _cpp_cell_boundary
-    from ._h3_toolkit_cpp import cell_boundary_from_children as _cpp_cell_boundary_from_children
-    from ._h3_toolkit_cpp import get_buffered_h3_polygon as _cpp_get_buffered_h3_polygon
+    from ._h3_boundary_cpp import cell_boundary as _cpp_cell_boundary
+    from ._h3_boundary_cpp import cell_boundary_from_children as _cpp_cell_boundary_from_children
+    from ._h3_boundary_cpp import get_buffered_h3_polygon as _cpp_get_buffered_h3_polygon
     
     def cell_boundary_to_geojson_cpp(cell: str):
         """C++ version of cell_boundary_to_geojson. Returns GeoJSON Feature."""

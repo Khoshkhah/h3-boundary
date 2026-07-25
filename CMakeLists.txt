@@ -50,10 +50,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pybind11)
 
-pybind11_add_module(_h3_toolkit_cpp src/bindings/python_bindings.cpp)
-target_link_libraries(_h3_toolkit_cpp PRIVATE h3_toolkit h3)
-target_include_directories(_h3_toolkit_cpp PRIVATE src/cpp/include ${h3_SOURCE_DIR}/src/h3lib/include)
+pybind11_add_module(_h3_boundary_cpp src/bindings/python_bindings.cpp)
+target_link_libraries(_h3_boundary_cpp PRIVATE h3_toolkit h3)
+target_include_directories(_h3_boundary_cpp PRIVATE src/cpp/include ${h3_SOURCE_DIR}/src/h3lib/include)
 
 # Install to Python package directory
-install(TARGETS _h3_toolkit_cpp DESTINATION ${CMAKE_SOURCE_DIR}/src/python/h3_toolkit)
+install(TARGETS _h3_boundary_cpp DESTINATION ${CMAKE_SOURCE_DIR}/src/python/h3_boundary)
 message(STATUS "Building Python bindings with pybind11")

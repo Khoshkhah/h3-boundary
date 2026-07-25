@@ -50,7 +50,7 @@ pip install -e .
 ## Quick Start
 
 ```python
-import h3_toolkit as h3t
+import h3_boundary as h3t
 
 cell = '86283082fffffff'  # Resolution 6 cell
 

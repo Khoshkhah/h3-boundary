@@ -42,7 +42,7 @@ Traces which boundary faces of an ancestor cell the given cell lies on.
 
 **Example:**
 ```python
-from h3_toolkit import trace_cell_to_ancestor_faces
+from h3_boundary import trace_cell_to_ancestor_faces
 
 cell = '8928308280fffff'  # Resolution 9
 faces = trace_cell_to_ancestor_faces(cell, {1, 2, 3, 4, 5, 6}, res_parent=6)
@@ -85,7 +85,7 @@ Returns all children at `target_res` that lie on the parent's specified boundary
 
 **Example:**
 ```python
-from h3_toolkit import children_on_boundary_faces
+from h3_boundary import children_on_boundary_faces
 
 children = children_on_boundary_faces('86283082fffffff', 10)
 print(f"Found {len(children)} boundary children")  # ~240 cells
@@ -238,7 +238,7 @@ C++ buffered polygon with configurable accuracy.
 
 **Example:**
 ```python
-from h3_toolkit import get_buffered_boundary_polygon_cpp
+from h3_boundary import get_buffered_boundary_polygon_cpp
 
 # Accurate mode (default)
 result = get_buffered_boundary_polygon_cpp(
@@ -287,18 +287,18 @@ For direct C++ usage, include `h3_toolkit.hpp`:
 #include "h3_toolkit.hpp"
 
 // Trace faces
-std::set<int> faces = h3_toolkit::trace_cell_to_ancestor_faces(
+std::set<int> faces = h3_boundary::trace_cell_to_ancestor_faces(
     cell, input_faces, res_parent
 );
 
 // Get boundary children
-std::vector<H3Index> children = h3_toolkit::children_on_boundary_faces(
+std::vector<H3Index> children = h3_boundary::children_on_boundary_faces(
     parent, target_res
 );
 
 // Get buffered polygon (returns vector of (lon, lat) pairs)
 std::vector<std::pair<double, double>> polygon = 
-    h3_toolkit::get_buffered_boundary_polygon(
+    h3_boundary::get_buffered_boundary_polygon(
         cell, 
         intermediate_res, 
         buffer_meters,
@@ -309,7 +309,7 @@ std::vector<std::pair<double, double>> polygon =
 ### Function Signatures
 
 ```cpp
-namespace h3_toolkit {
+namespace h3_boundary {
 
 std::set<int> trace_cell_to_ancestor_faces(
     H3Index h,
@@ -352,7 +352,7 @@ std::vector<std::pair<double, double>> get_buffered_boundary_polygon(
     bool use_convex_hull = true
 );
 
-} // namespace h3_toolkit
+} // namespace h3_boundary
 ```
 
 ---

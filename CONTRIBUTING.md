@@ -25,7 +25,7 @@ Thank you for your interest in contributing to H3-Toolkit! This document provide
    mkdir build && cd build
    cmake -DCMAKE_BUILD_TYPE=Debug ..
    make -j4
-   cp _h3_toolkit_cpp*.so ../src/python/h3_toolkit/
+   cp _h3_boundary_cpp*.so ../src/python/h3_boundary/
    ```
 
 4. **Run tests**
@@ -44,7 +44,7 @@ h3-toolkit/
 │   ├── bindings/               # pybind11 bindings
 │   │   └── python_bindings.cpp
 │   └── python/                 # Python package
-│       └── h3_toolkit/
+│       └── h3_boundary/
 │           ├── __init__.py     # Package exports + C++ wrappers
 │           ├── geom.py         # Pure Python geometry
 │           └── utils.py        # Pure Python utilities
@@ -71,9 +71,9 @@ h3-toolkit/
 1. **Implement in C++** (`src/cpp/src/h3_toolkit.cpp`)
 2. **Add declaration** (`src/cpp/include/h3_toolkit.hpp`)
 3. **Add pybind11 binding** (`src/bindings/python_bindings.cpp`)
-4. **Add Python wrapper** (`src/python/h3_toolkit/__init__.py`)
-5. **Add pure Python fallback** (`src/python/h3_toolkit/geom.py` or `utils.py`)
-6. **Write tests** (`tests/test_h3_toolkit.py`)
+4. **Add Python wrapper** (`src/python/h3_boundary/__init__.py`)
+5. **Add pure Python fallback** (`src/python/h3_boundary/geom.py` or `utils.py`)
+6. **Write tests** (`tests/test_h3_boundary.py`)
 7. **Update documentation** (`docs/api_reference.md`)
 
 ### Testing
@@ -87,10 +87,10 @@ h3-toolkit/
 pytest tests/ -v
 
 # Run specific test
-pytest tests/test_h3_toolkit.py::test_children_on_boundary_faces -v
+pytest tests/test_h3_boundary.py::test_children_on_boundary_faces -v
 
 # Run with coverage
-pytest tests/ --cov=h3_toolkit --cov-report=html
+pytest tests/ --cov=h3_boundary --cov-report=html
 ```
 
 ### Benchmarking
@@ -99,7 +99,7 @@ When adding performance-critical code, include benchmarks:
 
 ```python
 import time
-from h3_toolkit import function_python, function_cpp
+from h3_boundary import function_python, function_cpp
 
 cell = '86283082fffffff'
 
@@ -134,7 +134,7 @@ for name, func in [('Python', function_python), ('C++', function_cpp)]:
 
 When reporting issues, please include:
 
-1. **H3-Toolkit version** (`h3_toolkit.__version__`)
+1. **H3-Toolkit version** (`h3_boundary.__version__`)
 2. **Python version** (`python --version`)
 3. **Operating system**
 4. **Minimal reproducible example**

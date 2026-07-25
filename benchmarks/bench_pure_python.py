@@ -4,7 +4,7 @@ Benchmark: Pure Python implementation
 """
 import time
 import h3
-from h3_toolkit.utils import children_on_boundary_faces
+from h3_boundary.utils import children_on_boundary_faces
 
 TARGET_RES = 15
 

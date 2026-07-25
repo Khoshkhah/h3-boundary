@@ -35,7 +35,7 @@ class CMakeBuild(build_ext):
         build_args = [
             'cmake',
             '--build', '.',
-            '--target', '_h3_toolkit_cpp',
+            '--target', '_h3_boundary_cpp',
             '--config', 'Release',
             '-j'
         ]
@@ -47,10 +47,10 @@ class CMakeBuild(build_ext):
             
             # Copy the built module to the package
             import glob
-            so_files = glob.glob(os.path.join(build_dir, '_h3_toolkit_cpp*.so'))
+            so_files = glob.glob(os.path.join(build_dir, '_h3_boundary_cpp*.so'))
             if so_files:
                 import shutil
-                dest = os.path.join(os.path.dirname(__file__), 'src', 'python', 'h3_toolkit')
+                dest = os.path.join(os.path.dirname(__file__), 'src', 'python', 'h3_boundary')
                 for so_file in so_files:
                     shutil.copy(so_file, dest)
                     print(f"Installed: {os.path.basename(so_file)}")
@@ -63,7 +63,7 @@ class CMakeBuild(build_ext):
 
 
 setup(
-    name="h3-toolkit",
+    name="h3-boundary",
     version="0.1.0",
     description="Advanced H3 boundary tracing and geometry utilities",
     author="H3-Toolkit Contributors",
@@ -88,7 +88,7 @@ setup(
     },
     # Include compiled extensions if they exist
     package_data={
-        'h3_toolkit': ['*.so', '*.pyd', '*.dylib'],
+        'h3_boundary': ['*.so', '*.pyd', '*.dylib'],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",

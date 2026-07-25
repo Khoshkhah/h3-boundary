@@ -3,7 +3,7 @@
 Verify C++ results match Python by comparing a sample of boundary children.
 """
 import h3
-from h3_toolkit.utils import children_on_boundary_faces
+from h3_boundary.utils import children_on_boundary_faces
 
 def verify():
     # Same base cell as C++ benchmark

@@ -5,8 +5,8 @@ for cells at each resolution with children at a target resolution.
 """
 import h3
 import time
-from h3_toolkit import children_on_boundary_faces, get_backend
-from h3_toolkit.geom import cell_boundary_from_children
+from h3_boundary import children_on_boundary_faces, get_backend
+from h3_boundary.geom import cell_boundary_from_children
 from shapely.geometry import shape
 
 # Configuration - use 10 for reasonable speed, 15 for complete data

@@ -59,7 +59,7 @@ std::vector<std::string> py_children_on_boundary_faces(
     return result;
 }
 
-PYBIND11_MODULE(_h3_toolkit_cpp, m) {
+PYBIND11_MODULE(_h3_boundary_cpp, m) {
     m.doc() = "H3-Toolkit C++ bindings for Python";
     
     m.def("trace_cell_to_ancestor_faces", &py_trace_cell_to_ancestor_faces,

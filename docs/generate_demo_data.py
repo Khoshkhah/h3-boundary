@@ -1,4 +1,4 @@
-import h3_toolkit
+import h3_boundary
 import json
 import h3
 
@@ -12,23 +12,23 @@ intermediate_res = 10
 origin = h3.latlng_to_cell(lat, lng, origin_res)
 
 # Box 1: Original Cell Boundary
-cell_boundary_gj = h3_toolkit.cell_boundary_to_geojson_cpp(origin)
+cell_boundary_gj = h3_boundary.cell_boundary_to_geojson_cpp(origin)
 
 # Box 2: Boundary Children
-boundary_children = h3_toolkit.children_on_boundary_faces(origin, intermediate_res)
+boundary_children = h3_boundary.children_on_boundary_faces(origin, intermediate_res)
 boundary_children_gj = {
     'type': 'FeatureCollection',
-    'features': [h3_toolkit.cell_boundary_to_geojson_cpp(c) for c in boundary_children]
+    'features': [h3_boundary.cell_boundary_to_geojson_cpp(c) for c in boundary_children]
 }
 
 # Box 3: Merged Boundary
-merged_boundary_gj = h3_toolkit.cell_boundary_from_children_cpp(origin, intermediate_res)
+merged_boundary_gj = h3_boundary.cell_boundary_from_children_cpp(origin, intermediate_res)
 
 # Box 4: Buffered Accurate (Res 7 -> 10, convex=False, buffer=None i.e. auto)
-buffered_accurate_gj = h3_toolkit.get_buffered_boundary_polygon_cpp(origin, intermediate_res, None, False)
+buffered_accurate_gj = h3_boundary.get_buffered_boundary_polygon_cpp(origin, intermediate_res, None, False)
 
 # Box 5: Buffered Fast (Res 7 -> 10, convex=True, buffer=None i.e. auto)
-buffered_fast_gj = h3_toolkit.get_buffered_boundary_polygon_cpp(origin, intermediate_res, None, True)
+buffered_fast_gj = h3_boundary.get_buffered_boundary_polygon_cpp(origin, intermediate_res, None, True)
 
 print("Writing to docs/demo_data.js...")
 with open('docs/demo_data.js', 'w') as f:

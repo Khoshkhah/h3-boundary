@@ -25,7 +25,7 @@ from shapely.geometry import Polygon, shape
 # Import from package level to use C++ binding when available
 def _get_children_on_boundary_faces():
     try:
-        from ._h3_toolkit_cpp import children_on_boundary_faces
+        from ._h3_boundary_cpp import children_on_boundary_faces
         return children_on_boundary_faces
     except ImportError:
         from .utils import children_on_boundary_faces

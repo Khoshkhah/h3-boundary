@@ -4,7 +4,7 @@ Benchmark: children_on_boundary_faces from res 0 to res 15
 """
 import time
 import h3
-from h3_toolkit.utils import children_on_boundary_faces
+from h3_boundary.utils import children_on_boundary_faces
 
 def benchmark():
     # Get a resolution 0 cell (base cell)

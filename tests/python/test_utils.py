@@ -1,11 +1,11 @@
 import pytest
 import h3
-from h3_toolkit.utils import (
+from h3_boundary.utils import (
     trace_cell_to_ancestor_faces,
     trace_cell_to_parent_faces,
     cell_to_coarsest_ancestor_on_faces
 )
-from h3_toolkit.geom import (
+from h3_boundary.geom import (
     cell_boundary_to_geojson,
     get_boundary_cells
 )

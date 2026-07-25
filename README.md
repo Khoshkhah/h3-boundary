@@ -65,8 +65,8 @@ pip install -e .
 ### Verify Installation
 
 ```python
-import h3_toolkit
-print(h3_toolkit.get_backend())  # Should print 'cpp'
+import h3_boundary
+print(h3_boundary.get_backend())  # Should print 'cpp'
 print(h3_toolkit.cpp_geom_available())  # Should print True
 ```
 
@@ -75,7 +75,7 @@ print(h3_toolkit.cpp_geom_available())  # Should print True
 ### Basic Usage
 
 ```python
-import h3_toolkit as h3t
+import h3_boundary as h3t
 
 # Get a cell
 cell = '86283082fffffff'  # Resolution 6 cell in San Francisco
@@ -116,11 +116,11 @@ All functions have both Python and C++ versions:
 
 ```python
 # Pure Python (uses Shapely)
-from h3_toolkit import get_buffered_boundary_polygon
+from h3_boundary import get_buffered_boundary_polygon
 result_py = get_buffered_boundary_polygon(cell, 10)
 
 # C++ accelerated (uses Boost.Geometry)
-from h3_toolkit import get_buffered_boundary_polygon_cpp
+from h3_boundary import get_buffered_boundary_polygon_cpp
 result_cpp = get_buffered_boundary_polygon_cpp(cell, 10)
 
 # Both return identical GeoJSON format
@@ -207,12 +207,12 @@ h3-toolkit/
 │   ├── bindings/
 │   │   └── python_bindings.cpp   # pybind11 bindings
 │   └── python/
-│       └── h3_toolkit/
+│       └── h3_boundary/
 │           ├── __init__.py       # Package exports
 │           ├── geom.py           # Python geometry functions
 │           └── utils.py          # Python utility functions
 ├── tests/
-│   └── test_h3_toolkit.py   # Test suite
+│   └── test_h3_boundary.py   # Test suite
 └── docs/
     └── api_reference.md     # Detailed API documentation
 ```
@@ -249,7 +249,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j4
 
 # Copy to Python package
-cp _h3_toolkit_cpp*.so ../src/python/h3_toolkit/
+cp _h3_boundary_cpp*.so ../src/python/h3_boundary/
 ```
 
 ### Running Tests

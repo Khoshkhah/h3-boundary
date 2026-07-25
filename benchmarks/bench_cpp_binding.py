@@ -4,7 +4,7 @@ Benchmark: C++ bindings (pybind11)
 """
 import time
 import h3
-from h3_toolkit._h3_toolkit_cpp import children_on_boundary_faces
+from h3_boundary._h3_boundary_cpp import children_on_boundary_faces
 
 TARGET_RES = 15
 
