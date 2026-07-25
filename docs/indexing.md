@@ -204,7 +204,7 @@ for cell in boundary_range(parent, target_res, lo, hi):
 
 ---
 
-## Generating the whole boundary: three ways
+## Generating the whole boundary: four ways
 
 ### 1. Unrank every position (don't)
 
@@ -244,13 +244,29 @@ Every cell in a group has the same state, so it has the same valid digits — on
 
 **How different is the result?** The *set* is identical — same cells, same count, no duplicates, verified across hundreds of parents worldwide including pentagons, poles and the antimeridian. The *sequence* is unrelated: essentially no cell lands in the same position, and the average one is displaced by about a third of the boundary's length.
 
-But the two are one sort apart, because **traversal order is exactly ascending index order**. Every returned cell shares the parent's prefix, the resolution field and the filler digits, so comparing two of them reduces to comparing their digit strings — and depth-first descent visits digits in ascending order. Therefore:
+### 4. Level expansion, then sort — ordered
+
+The two are only one sort apart, because **traversal order is exactly ascending index order**. Every returned cell shares the parent's prefix, the resolution field and the filler digits, so comparing two of them reduces to comparing their digit strings — and depth-first descent visits digits in ascending order.
+
+That makes the bulk path a way to get *ordered* output too:
 
 ```python
-np.sort(boundary_cell_ids(parent, res)) == children_on_boundary_faces_ids(parent, res)   # exactly
+ordered = np.sort(boundary_cell_ids(parent, target_res))
+# bit-identical to children_on_boundary_faces_ids(parent, target_res)
 ```
 
-and sorting the bulk output is *still* faster than the ordered traversal — 9.7 ms against 13.5 ms at 531,438 cells. Both properties are asserted in the test suite.
+And it wins, because expanding levels in bulk and then sorting costs less than descending cell by cell:
+
+| Ordered output | 6,558 cells | 59,046 | 531,438 |
+|---|---|---|---|
+| recursive descent (C++) | 0.13 ms | 1.24 ms | 11.8 ms |
+| **bulk (C++) + sort** | **0.08 ms** | **0.73 ms** | **7.1 ms** |
+| bulk (NumPy) + sort | 0.60 ms | 1.49 ms | 8.3 ms |
+| recursive descent (Python) | 4.20 ms | 36.3 ms | 337 ms |
+
+All four produce identical arrays. Both properties — that the traversal is sorted, and that sorting the bulk output reproduces it — are asserted in the test suite.
+
+The recursive descent still has its place: it is the only one that can produce a *slice* (`boundary_range`) without generating everything first, and it streams with O(depth) memory instead of materializing the whole boundary twice.
 
 ### Every implementation, measured
 
@@ -268,13 +284,16 @@ Both approaches, each written three ways, on the same machine (6 threads):
 | **bulk** | level expansion (NumPy, 6 processes) | 3.4 ms | 3.4 ms | 6.5 ms |
 | **bulk** | level expansion (C++) | **0.03 ms** | **0.23 ms** | 2.0 ms |
 | **bulk** | level expansion (C++, 6 threads) | 0.57 ms | 0.72 ms | **1.2 ms** |
+| ordered | bulk (C++) **+ sort** | 0.08 ms | 0.73 ms | 7.1 ms |
+| ordered | bulk (NumPy) **+ sort** | 0.60 ms | 1.49 ms | 8.3 ms |
 
-Four things this shows:
+Five things this shows:
 
 1. **Unranking in a loop is the wrong tool for bulk work, in any language.** C++ is no faster than Python here (78 ms vs 71 ms) — the cost is one call per cell, not the arithmetic inside it. Use it for *some* cells.
 2. **Bulk beats ordered at every size**, once both are in the same language: 0.03 ms vs 0.15 ms at 6.5k cells, 2.0 ms vs 13.3 ms at half a million. Buckets of cells advancing together beat one recursion step per cell.
 3. **NumPy is the fastest option without a compiler** — within 2× of C++ at large sizes — but its per-operation overhead makes it slower than C++ by 15× when the arrays are small.
-4. **Parallelism pays only for the biggest boundaries.** Below ~100k cells, thread hand-off costs more than the work saved. At 531k it gives 6× on the ordered path (13.3 → 2.2 ms) and 1.6× on bulk (2.0 → 1.2 ms). NumPy gains nothing from threads (it holds the GIL for the bookkeeping between array ops) and needs processes to parallelize at all — the C++ functions release the GIL, so plain threads work.
+4. **Even for ordered output, bulk is the faster route** — expand in bulk and sort (7.1 ms) rather than descend cell by cell (13.3 ms). The recursion is only needed when you want a *slice* rather than everything.
+5. **Parallelism pays only for the biggest boundaries.** Below ~100k cells, thread hand-off costs more than the work saved. At 531k it gives 6× on the ordered path (13.3 → 2.2 ms) and 1.6× on bulk (2.0 → 1.2 ms). NumPy gains nothing from threads (it holds the GIL for the bookkeeping between array ops) and needs processes to parallelize at all — the C++ functions release the GIL, so plain threads work.
 
 Reproduce with `python benchmarks/compare_implementations.py`.
 
@@ -308,7 +327,8 @@ So the two trade places under parallelism: bulk is far ahead serially, but order
 
 - **some cells** → `boundary_cell_at` / `boundary_range`
 - **all of them, order irrelevant** → `boundary_cell_ids` (C++ when built, NumPy otherwise)
-- **all of them, in order** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
+- **all of them, in order, as ids** → `np.sort(boundary_cell_ids(...))` — fastest, and identical to the traversal
+- **all of them, in order, as hex strings** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
 
 ---
 
