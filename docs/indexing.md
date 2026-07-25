@@ -202,7 +202,16 @@ for cell in boundary_range(parent, target_res, lo, hi):
 
 Δ is at most 15, so **every** lookup is bounded by roughly 100 arithmetic operations. The boundary's size never enters the cost — 0.011 ms whether it holds 78 cells or 531,438.
 
-The one thing this is *not* best at: generating the whole boundary. There, `children_on_boundary_faces` wins because it shares work between neighbouring cells instead of re-descending per cell. Use indexing when you want *some* cells, not *all* of them.
+The one thing this is *not* best at: generating the whole boundary. Indexing re-descends from the parent for each cell, while the bulk functions share that work between cells — at 531,438 cells they are far ahead:
+
+| Whole boundary | Time |
+|---|---|
+| `boundary_cell_ids` (unordered, uint64) | 1.9 ms |
+| `children_on_boundary_faces_ids` (ordered, uint64) | 12 ms |
+| `children_on_boundary_faces` (ordered, hex strings) | 56 ms |
+| `boundary_cell_at` in a loop | ~5,900 ms (0.011 ms x 531,438) |
+
+Use indexing when you want *some* cells; use the bulk functions when you want *all* of them.
 
 ---
 
@@ -219,6 +228,8 @@ boundary_range(parent, target_res, start=0, stop=None, input_faces={1,2,3,4,5,6}
 - `input_faces` restricts the traversal to part of the boundary; it must match across calls for ranks to line up.
 - `boundary_cell_at` raises `IndexError` outside `range(count)`; `boundary_rank` raises `ValueError` for non-descendants and interior cells.
 - All three work with or without the C++ extension (`boundary_range` uses it when present).
+
+**Ranks refer to traversal order.** They index the sequence produced by `children_on_boundary_faces` and `children_on_boundary_faces_ids`. `boundary_cell_ids` returns the same cells grouped by state instead, so positions there are unrelated — don't mix the two.
 
 ## How it is verified
 
