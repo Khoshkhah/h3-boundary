@@ -20,6 +20,7 @@ import time
 from collections import Counter, deque
 
 import h3
+import h3.api.basic_int as h3i
 
 from h3_boundary import utils as table_py
 
@@ -94,6 +95,65 @@ def boundary_walk(parent: str, target_res: int) -> set:
                 result.add(n)
                 q.append(n)
     return result
+
+
+def boundary_walk_fast(parent: str, target_res: int) -> set:
+    """Optimized walk: integer API end-to-end and exactly one grid_ring call
+    per boundary cell.
+
+    Instead of probing each inside-neighbor's own ring to test whether it is
+    boundary, neighbors are *certified* from the current cell's ring: the k=1
+    ring is rotationally ordered, so an inside neighbor sitting next to an
+    outside neighbor shares an edge with that outside cell and is therefore
+    boundary. Consecutive wall cells always share an outside cell (the three
+    cells at a hex vertex are pairwise adjacent, and a contour vertex always
+    has an outside cell), so certification alone reaches the whole wall.
+    """
+    parent_res = h3.get_resolution(parent)
+    digit_mask = (1 << (3 * (15 - parent_res))) - 1
+    res_stamp = parent_res << 52
+    nres_field = ~RES_FIELD
+    want = int(parent, 16)
+
+    def inside(v: int) -> bool:
+        return ((v | digit_mask) & nres_field) | res_stamp == want
+
+    def probe_is_boundary(v: int) -> bool:
+        return inside(v) and any(not inside(n) for n in h3i.grid_ring(v, 1))
+
+    # Start: BFS from a vertex-snapped seed to the first boundary cell.
+    lat, lng = h3.cell_to_boundary(parent)[0]
+    seed = h3i.latlng_to_cell(lat, lng, target_res)
+    seen, q, start = {seed}, deque([seed]), None
+    while q:
+        v = q.popleft()
+        if probe_is_boundary(v):
+            start = v
+            break
+        for n in h3i.grid_ring(v, 1):
+            if n not in seen:
+                seen.add(n)
+                q.append(n)
+
+    result, q = {start}, deque([start])
+    while q:
+        v = q.popleft()
+        ring = h3i.grid_ring(v, 1)
+        if len(ring) == 6:
+            ins = [inside(n) for n in ring]
+            for i in range(6):
+                n = ring[i]
+                if (ins[i] and n not in result
+                        and (not ins[i - 1] or not ins[(i + 1) % 6])):
+                    result.add(n)
+                    q.append(n)
+        else:
+            # pentagon distortion: ring order not guaranteed, probe instead
+            for n in ring:
+                if n not in result and probe_is_boundary(n):
+                    result.add(n)
+                    q.append(n)
+    return {format(v, 'x') for v in result}
 
 
 def outline_distance_samples(parent: str, target_res: int, per_edge: int = 4):
@@ -172,6 +232,9 @@ def main():
 
         out, t = bench(lambda: boundary_walk(parent, target))
         rows.append(("walk", out, t))
+
+        out, t = bench(lambda: boundary_walk_fast(parent, target), reps=3)
+        rows.append(("walk-fast", out, t))
 
         out, t = bench(lambda: boundary_ring_band(parent, target))
         rows.append(("ring-band", out, t))
