@@ -39,8 +39,9 @@ The naive approach — generate every descendant and keep the ones touching the 
 
 | If you want to… | Use | Why |
 |---|---|---|
-| Get the whole boundary, order matters | `children_on_boundary_faces` | The default |
-| Get the whole boundary as a set | `boundary_cell_ids` | Fastest by far; unordered uint64 array |
+| Get the whole boundary as hex strings | `children_on_boundary_faces` | The default |
+| …as integers, same order | `children_on_boundary_faces_ids` | 4–5× faster; skips string formatting |
+| …as a set, order irrelevant | `boundary_cell_ids` | Fastest by far; unordered uint64 array |
 | Get one cell, or a random sample | `boundary_cell_at` | O(depth), ignores boundary size entirely |
 | Know if a cell is on the boundary, and where | `boundary_rank` | O(depth) membership test + position |
 | Split the work across workers | `boundary_range` | Each worker streams its own slice, no coordination |
@@ -107,7 +108,15 @@ for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
 - **Trade-off:** for plain full generation it is not faster than approach 1 — its value is the access patterns approach 1 cannot express
 - **Full explanation:** [Boundary Indexing](indexing.md) walks through the counting formulas and a worked example
 
-### Bulk variant: dropping the order
+### Bulk variants: strings and order are the real costs
+
+Two things dominate large calls, and neither is the algorithm:
+
+**Hex strings.** Every cell returned as text costs a `format()`; at half a million cells that is ~80% of the total. `children_on_boundary_faces_ids` returns the same cells in the same order as a NumPy `uint64` array instead, and runs 4–5× faster (56 ms → 12 ms at 531,438 cells). The C++ binding fills the array with a single `memcpy`.
+
+**Ordering.** See below — dropping it unlocks a bigger win still.
+
+### Dropping the order
 
 `children_on_boundary_faces` returns cells in traversal order, and that order is what forces one Python-level step per node. If you only want the **set**, the same table logic can run a whole level at a time: group the live cells by their boundary state, and expand each group with array arithmetic. Roughly 30 vectorized operations per level replace hundreds of thousands of individual steps.
 

@@ -230,11 +230,11 @@ def cell_to_coarsest_ancestor_on_faces(
     return current_h
 
 
-def children_on_boundary_faces(
+def _boundary_child_ints(
     parent: str,
     target_res: int,
     input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
-) -> List[str]:
+) -> List[int]:
     """
     Returns all descendants of `parent` at `target_res` that lie on the
     parent's specified boundary faces.
@@ -305,7 +305,53 @@ def children_on_boundary_faces(
                 _collect(base + (digit << shift), child_res, mapped_faces, False)
 
     _collect(int(parent, 16), res_parent, input_faces, h3.is_pentagon(parent))
-    return [format(v, 'x') for v in result]
+    return result
+
+
+def children_on_boundary_faces(
+    parent: str,
+    target_res: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+) -> List[str]:
+    return [format(v, 'x') for v in _boundary_child_ints(parent, target_res, input_faces)]
+
+
+children_on_boundary_faces.__doc__ = _boundary_child_ints.__doc__
+
+
+def children_on_boundary_faces_ids(
+    parent: str,
+    target_res: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+):
+    """
+    Same cells and same order as :func:`children_on_boundary_faces`, returned
+    as a NumPy array of 64-bit H3 indexes instead of hex strings.
+
+    Formatting hex strings dominates bulk calls — about 80% of the time for a
+    half-million-cell boundary — so this is several times faster when the
+    caller can work with integers (h3-py's ``h3.api.basic_int``, a dataframe
+    column, a database join). Use :func:`boundary_cell_ids` instead if the
+    order does not matter; it is faster still.
+
+    Args:
+        parent: Parent H3 cell index (hex string).
+        target_res: Resolution of the boundary children
+            (parent resolution <= target_res <= 15).
+        input_faces: Parent face numbers {1-6} to cover; defaults to all six.
+
+    Returns:
+        ``numpy.ndarray`` of dtype uint64, in traversal order.
+
+    Raises:
+        ValueError: If `target_res` is below the parent's resolution or
+            above 15.
+    """
+    import numpy as np  # kept out of import time; guaranteed via shapely
+
+    return np.array(
+        _boundary_child_ints(parent, target_res, input_faces), dtype=np.uint64
+    )
 
 
 def boundary_cell_ids(

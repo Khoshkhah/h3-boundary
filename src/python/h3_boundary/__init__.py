@@ -72,6 +72,16 @@ except ImportError:
 # Direct boundary indexing (pure Python, backend-independent): random access
 # to the n-th boundary child and its inverse, in O(depth) arithmetic.
 from .utils import boundary_cell_at, boundary_rank, boundary_range, boundary_cell_ids
+from .utils import children_on_boundary_faces_ids
+
+# The C++ traversal can hand back raw uint64 indexes without building hex
+# strings for every cell, which is most of the cost on bulk calls.
+# (_h3_boundary_cpp.boundary_range_ids is the sliced equivalent, left in the
+# extension module since it has no pure-Python counterpart.)
+try:
+    from ._h3_boundary_cpp import children_on_boundary_faces_ids
+except ImportError:
+    pass  # keep the pure-Python version imported above
 
 # boundary_range streams, so it stays a generator with bounded memory; when
 # the extension is present it pulls blocks from C++ instead of stepping the
@@ -314,8 +324,9 @@ __all__ = [
     "boundary_cell_at",
     "boundary_rank",
     "boundary_range",
-    # Unordered bulk generation (NumPy uint64 array)
-    "boundary_cell_ids",
+    # NumPy uint64 output — no per-cell hex strings
+    "children_on_boundary_faces_ids",   # traversal order
+    "boundary_cell_ids",                # unordered, fastest
     # Geometry (pure Python / Shapely)
     "cell_boundary_to_geojson",
     "get_boundary_cells",

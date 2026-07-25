@@ -114,6 +114,26 @@ Finds the coarsest ancestor (lowest resolution) where the cell still lies on at 
 
 ---
 
+### `children_on_boundary_faces_ids`
+
+```python
+children_on_boundary_faces_ids(
+    parent: str,
+    target_res: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
+) -> numpy.ndarray  # dtype uint64
+```
+
+Identical cells **and order** to `children_on_boundary_faces`, returned as 64-bit indexes instead of hex strings. Formatting those strings is roughly 80% of the cost on bulk calls, so this is 4–5× faster whenever the caller can work with integers:
+
+| Boundary size | strings (C++) | `*_ids` (C++) |
+|---|---|---|
+| 6,558 | 0.60 ms | 0.13 ms |
+| 59,046 | 6.3 ms | 1.3 ms |
+| 531,438 | 56 ms | 12 ms |
+
+Uses the C++ extension when built and the pure-Python traversal otherwise. For sliced output there is `_h3_boundary_cpp.boundary_range_ids(parent, target_res, start, stop)` (extension only). If order does not matter, `boundary_cell_ids` is faster still.
+
 ### `boundary_cell_ids`
 
 ```python

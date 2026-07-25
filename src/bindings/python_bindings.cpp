@@ -1,7 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 #include "h3_toolkit.hpp"
 #include <h3api.h>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 
@@ -52,6 +54,17 @@ static std::vector<std::string> py_children_on_boundary_faces(
 
 static const std::set<int> ALL_FACES = {1, 2, 3, 4, 5, 6};
 
+// Hand back raw 64-bit indexes as a NumPy array instead of hex strings.
+// Formatting strings dominates bulk calls (~90% of the time at half a
+// million cells), so the *_ids variants below skip it entirely.
+static py::array_t<uint64_t> to_id_array(const std::vector<H3Index>& cells) {
+    // Explicit shape vector: the single-argument array_t(count) overload is
+    // ambiguous and yields a stride-0 broadcast view rather than storage.
+    std::vector<py::ssize_t> shape{static_cast<py::ssize_t>(cells.size())};
+    return py::array_t<uint64_t>(
+        shape, cells.empty() ? nullptr : reinterpret_cast<const uint64_t*>(cells.data()));
+}
+
 PYBIND11_MODULE(_h3_boundary_cpp, m) {
     m.doc() = "h3-boundary C++ bindings";
     // All functions run pure C++ after argument conversion, so the GIL is
@@ -79,6 +92,39 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
           py::arg("input_faces") = ALL_FACES,
           nogil,
           "Returns all children at target_res that lie on parent's boundary faces.");
+
+    // NOTE: no call_guard on the *_ids functions — building the NumPy array
+    // needs the GIL, so it is released only around the C++ work itself.
+    m.def("children_on_boundary_faces_ids",
+          [](const std::string& parent_str, int target_res, const std::set<int>& input_faces) {
+              H3Index parent = string_to_h3(parent_str);
+              std::vector<H3Index> cells;
+              {
+                  py::gil_scoped_release release;
+                  cells = h3_toolkit::children_on_boundary_faces(parent, target_res, input_faces);
+              }
+              return to_id_array(cells);
+          },
+          py::arg("parent"), py::arg("target_res"),
+          py::arg("input_faces") = ALL_FACES,
+          "Boundary children in traversal order as a NumPy uint64 array "
+          "(same cells as children_on_boundary_faces, without hex strings).");
+
+    m.def("boundary_range_ids",
+          [](const std::string& parent_str, int target_res, int64_t start,
+             int64_t stop, const std::set<int>& input_faces) {
+              H3Index parent = string_to_h3(parent_str);
+              std::vector<H3Index> cells;
+              {
+                  py::gil_scoped_release release;
+                  cells = h3_toolkit::boundary_range(parent, target_res, start, stop, input_faces);
+              }
+              return to_id_array(cells);
+          },
+          py::arg("parent"), py::arg("target_res"), py::arg("start") = 0,
+          py::arg("stop") = -1, py::arg("input_faces") = ALL_FACES,
+          "Boundary children [start, stop) in traversal order as a NumPy "
+          "uint64 array.");
 
     m.def("boundary_range",
           [](const std::string& parent_str, int target_res, int64_t start,
