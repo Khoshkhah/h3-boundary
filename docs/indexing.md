@@ -242,6 +242,16 @@ level k+1:  state {1,3}:   [ 30,000 cells ]      state {5}:   [ 18,000 cells ]
 
 Every cell in a group has the same state, so it has the same valid digits — one addition over the whole group replaces one step per cell. That is `boundary_cell_ids`. The catch is that cells from different branches end up mixed together in the groups, so the traversal order is gone.
 
+**How different is the result?** The *set* is identical — same cells, same count, no duplicates, verified across hundreds of parents worldwide including pentagons, poles and the antimeridian. The *sequence* is unrelated: essentially no cell lands in the same position, and the average one is displaced by about a third of the boundary's length.
+
+But the two are one sort apart, because **traversal order is exactly ascending index order**. Every returned cell shares the parent's prefix, the resolution field and the filler digits, so comparing two of them reduces to comparing their digit strings — and depth-first descent visits digits in ascending order. Therefore:
+
+```python
+np.sort(boundary_cell_ids(parent, res)) == children_on_boundary_faces_ids(parent, res)   # exactly
+```
+
+and sorting the bulk output is *still* faster than the ordered traversal — 9.7 ms against 13.5 ms at 531,438 cells. Both properties are asserted in the test suite.
+
 ### Every implementation, measured
 
 Both approaches, each written three ways, on the same machine (6 threads):

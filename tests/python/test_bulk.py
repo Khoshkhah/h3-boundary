@@ -105,6 +105,41 @@ def test_partial_faces(boundary_cell_ids, faces):
     assert as_hex(ids) == set(children_on_boundary_faces(SF_RES6, 9, faces))
 
 
+@pytest.mark.parametrize("parent,target_res", [
+    (SF_RES6, 8),
+    (SF_RES6, 10),
+    (HEX_RES1, 5),
+    (PENT_RES0, 3),
+    (PENT_RES1, 4),
+])
+def test_traversal_order_is_numeric_order(parent, target_res):
+    """Traversal order is exactly ascending index order.
+
+    Not a coincidence: every returned cell shares the parent's prefix, the
+    same resolution field and the same filler digits, so comparing two of
+    them reduces to comparing their digit strings — and depth-first descent
+    visits digits in ascending order.
+    """
+    cells = children_on_boundary_faces(parent, target_res)
+    assert cells == sorted(cells)
+
+
+@pytest.mark.parametrize("parent,target_res", [
+    (SF_RES6, 8),
+    (SF_RES6, 10),
+    (PENT_RES0, 3),
+    (SF_RES2, 8),
+])
+def test_sorted_bulk_equals_ordered(boundary_cell_ids, children_ids, parent, target_res):
+    """Sorting the unordered output reproduces the ordered one exactly, which
+    is what makes the two interchangeable when order matters."""
+    import numpy as np
+    assert np.array_equal(
+        np.sort(boundary_cell_ids(parent, target_res)),
+        children_ids(parent, target_res),
+    )
+
+
 def test_dtype_and_h3_int_api_compatibility(boundary_cell_ids):
     import h3.api.basic_int as h3i
     ids = boundary_cell_ids(SF_RES6, 9)
