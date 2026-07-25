@@ -319,68 +319,33 @@ def children_on_boundary_faces(
 children_on_boundary_faces.__doc__ = _boundary_child_ints.__doc__
 
 
-def children_on_boundary_faces_ids(
-    parent: str,
-    target_res: int,
-    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
-):
-    """
-    Same cells and same order as :func:`children_on_boundary_faces`, returned
-    as a NumPy array of 64-bit H3 indexes instead of hex strings.
-
-    Formatting hex strings dominates bulk calls — about 80% of the time for a
-    half-million-cell boundary — so this is several times faster when the
-    caller can work with integers (h3-py's ``h3.api.basic_int``, a dataframe
-    column, a database join). Use :func:`boundary_cell_ids` instead if the
-    order does not matter; it is faster still.
-
-    Args:
-        parent: Parent H3 cell index (hex string).
-        target_res: Resolution of the boundary children
-            (parent resolution <= target_res <= 15).
-        input_faces: Parent face numbers {1-6} to cover; defaults to all six.
-
-    Returns:
-        ``numpy.ndarray`` of dtype uint64, in traversal order.
-
-    Raises:
-        ValueError: If `target_res` is below the parent's resolution or
-            above 15.
-    """
-    import numpy as np  # kept out of import time; guaranteed via shapely
-
-    return np.array(
-        _boundary_child_ints(parent, target_res, input_faces), dtype=np.uint64
-    )
-
-
 def boundary_cell_ids(
     parent: str,
     target_res: int,
     input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+    sort: bool = False,
 ):
     """
-    Returns all boundary children as a NumPy array of 64-bit H3 indexes,
-    unordered — the fast path when you want the whole set rather than a
-    sequence.
+    Returns all boundary children as a NumPy array of 64-bit H3 indexes.
 
-    Dropping the ordering requirement is what makes this fast: cells can be
-    grouped by boundary state and expanded a whole level at a time with array
-    arithmetic, instead of one Python call per node. The saving grows with the
-    boundary — roughly 8x at depth 7 and 180x at depth 11 versus
-    :func:`children_on_boundary_faces`, and faster than the C++ traversal too,
-    because no per-cell hex strings are built.
+    This is the fast way to get a whole boundary. Rather than walking cell by
+    cell, cells are grouped by boundary state and a whole level is expanded at
+    once with array arithmetic; no per-cell hex strings are built either. By
+    default the result is **unordered** (cells come out grouped by state).
 
-    The cells are grouped by boundary state, so the order differs from
-    :func:`children_on_boundary_faces`; use that function (or
-    :func:`boundary_range`) when position matters, and note that
-    :func:`boundary_rank` is defined against *its* order, not this one.
+    ``sort=True`` returns them in traversal order instead — identical to
+    :func:`children_on_boundary_faces`, because traversal order is exactly
+    ascending index order. Sorting costs roughly 4x the generation itself but
+    is still faster than descending cell by cell, so prefer it over the
+    string-returning traversal whenever integers will do.
 
     Args:
         parent: Parent H3 cell index (hex string).
         target_res: Resolution of the boundary children
             (parent resolution <= target_res <= 15).
         input_faces: Parent face numbers {1-6} to cover; defaults to all six.
+        sort: Return the cells in traversal (ascending index) order. Required
+            if positions are to line up with :func:`boundary_rank`.
 
     Returns:
         ``numpy.ndarray`` of dtype uint64 holding every boundary child.
@@ -402,6 +367,9 @@ def boundary_cell_ids(
     faces = frozenset(input_faces)
     if not faces:
         return np.empty(0, dtype=np.uint64)
+    if target_res == res_parent:
+        out = np.array([int(parent, 16)], dtype=np.uint64)
+        return out
 
     root_is_pent = h3.is_pentagon(parent)
     # state -> array of cell indexes currently in that state
@@ -434,7 +402,8 @@ def boundary_cell_ids(
     if not groups:
         return np.empty(0, dtype=np.uint64)
     parts = list(groups.values())
-    return parts[0] if len(parts) == 1 else np.concatenate(parts)
+    out = parts[0] if len(parts) == 1 else np.concatenate(parts)
+    return np.sort(out) if sort else out
 
 
 # =============================================================================

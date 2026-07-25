@@ -114,56 +114,35 @@ Finds the coarsest ancestor (lowest resolution) where the cell still lies on at 
 
 ---
 
-### `children_on_boundary_faces_ids`
-
-```python
-children_on_boundary_faces_ids(
-    parent: str,
-    target_res: int,
-    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
-) -> numpy.ndarray  # dtype uint64
-```
-
-Identical cells **and order** to `children_on_boundary_faces`, returned as 64-bit indexes instead of hex strings. Formatting those strings is roughly 80% of the cost on bulk calls, so this is 4–5× faster whenever the caller can work with integers:
-
-| Boundary size | strings (C++) | `*_ids` (C++) |
-|---|---|---|
-| 6,558 | 0.60 ms | 0.13 ms |
-| 59,046 | 6.3 ms | 1.3 ms |
-| 531,438 | 56 ms | 12 ms |
-
-Uses the C++ extension when built and the pure-Python traversal otherwise. For sliced output there is `_h3_boundary_cpp.boundary_range_ids(parent, target_res, start, stop)` (extension only). If order does not matter, `boundary_cell_ids` is faster still.
-
 ### `boundary_cell_ids`
 
 ```python
 boundary_cell_ids(
     parent: str,
     target_res: int,
-    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+    sort: bool = False
 ) -> numpy.ndarray  # dtype uint64
 ```
 
-All boundary children as a NumPy array of 64-bit H3 indexes, **unordered** — the fast path when you want the whole set rather than a sequence.
+Every boundary child as a NumPy array of 64-bit H3 indexes — the fast way to produce a whole boundary. Cells are grouped by boundary state and a level is expanded at a time with array arithmetic, instead of one call per cell, and no per-cell hex strings are built.
 
-Because order is not required, cells are grouped by boundary state and expanded a level at a time with array arithmetic instead of one Python call per node, and no per-cell hex strings are built:
+`sort=False` (default) returns them **unordered** (grouped by state). `sort=True` returns **traversal order** — the same sequence as `children_on_boundary_faces`, since traversal order is exactly ascending index order — for the cost of one `numpy.sort`.
 
-| Boundary size | `children_on_boundary_faces` (Python) | (C++) | `children_on_boundary_faces_ids` | `boundary_cell_ids` |
+| Boundary size | `children_on_boundary_faces` (Python) | (C++) | `boundary_cell_ids(sort=True)` | `boundary_cell_ids()` |
 |---|---|---|---|---|
-| 240 | 0.15 ms | 0.02 ms | **0.01 ms** | 0.23 ms |
-| 6,558 | 4.5 ms | 0.62 ms | **0.20 ms** | 0.79 ms |
-| 59,046 | 38 ms | 5.4 ms | 1.40 ms | **1.13 ms** |
-| 531,438 | 357 ms | 54 ms | 13 ms | **1.8 ms** |
-
-The vectorized path only pays off on large boundaries — below roughly **50,000 cells** NumPy's per-operation overhead makes the C++ traversal faster; above it, this wins by up to 7×.
+| 6,558 | 4.6 ms | 0.69 ms | 0.10 ms | **0.05 ms** |
+| 59,046 | 42 ms | 6.7 ms | 0.92 ms | **0.25 ms** |
+| 531,438 | 382 ms | 66 ms | 10.6 ms | **4.4 ms** |
 
 ```python
-ids = boundary_cell_ids(parent, 13)          # numpy uint64 array
-h3i.cell_to_latlng(int(ids[0]))              # feed h3.api.basic_int directly
-hexes = [format(v, 'x') for v in ids]        # …or convert to strings if needed
+ids = boundary_cell_ids(parent, 13)                # unordered, fastest
+ids = boundary_cell_ids(parent, 13, sort=True)     # traversal order
+h3i.cell_to_latlng(int(ids[0]))                    # feed h3.api.basic_int directly
+hexes = [format(v, 'x') for v in ids]              # …or convert to strings
 ```
 
-Note the order differs from `children_on_boundary_faces`, and `boundary_rank` is defined against *that* function's order — use the ordered API when position matters. Requires NumPy, which Shapely already pulls in.
+Uses the C++ extension when built, NumPy otherwise; the sort is always NumPy's radix sort, which beats `std::sort` on `uint64` by ~3.5×. Note `boundary_rank` is defined against traversal order, so only `sort=True` output lines up with it. For a *slice* rather than the whole boundary see `boundary_range`, or `_h3_boundary_cpp.boundary_range_ids` (extension only). Requires NumPy, which Shapely already pulls in.
 
 ### `boundary_cell_at`
 

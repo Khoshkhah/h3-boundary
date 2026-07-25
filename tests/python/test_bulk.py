@@ -8,12 +8,8 @@ import h3
 import pytest
 
 from h3_boundary import boundary_cell_ids as boundary_cell_ids_default
-from h3_boundary import children_on_boundary_faces_ids
 from h3_boundary.utils import children_on_boundary_faces
 from h3_boundary.utils import boundary_cell_ids as bulk_py
-from h3_boundary.utils import (
-    children_on_boundary_faces_ids as children_ids_py,
-)
 
 # NumPy level-expansion and (when built) the C++ one must agree.
 BULK_IMPLS = [bulk_py]
@@ -25,16 +21,12 @@ if boundary_cell_ids_default is not bulk_py:
 def boundary_cell_ids(request):
     return request.param
 
-# When the extension is built the package exports the C++ version; the pure
-# Python one must behave identically.
-ID_IMPLS = [children_ids_py]
-if children_on_boundary_faces_ids is not children_ids_py:
-    ID_IMPLS.append(children_on_boundary_faces_ids)
-
-
-@pytest.fixture(params=ID_IMPLS, ids=lambda f: getattr(f, "__module__", "cpp"))
-def children_ids(request):
-    return request.param
+@pytest.fixture
+def children_ids(boundary_cell_ids):
+    """The ordered form is the same call with sort=True."""
+    def ordered(parent, target_res, input_faces={1, 2, 3, 4, 5, 6}):
+        return boundary_cell_ids(parent, target_res, input_faces, sort=True)
+    return ordered
 
 SF_RES6 = h3.latlng_to_cell(37.7759, -122.4180, 6)
 SF_RES2 = h3.latlng_to_cell(37.7759, -122.4180, 2)

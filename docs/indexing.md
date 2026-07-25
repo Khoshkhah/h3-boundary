@@ -248,23 +248,29 @@ Every cell in a group has the same state, so it has the same valid digits — on
 
 The two are only one sort apart, because **traversal order is exactly ascending index order**. Every returned cell shares the parent's prefix, the resolution field and the filler digits, so comparing two of them reduces to comparing their digit strings — and depth-first descent visits digits in ascending order.
 
-That makes the bulk path a way to get *ordered* output too:
+So to put the bulk output in traversal order you just… sort the numbers:
 
 ```python
-ordered = np.sort(boundary_cell_ids(parent, target_res))
-# bit-identical to children_on_boundary_faces_ids(parent, target_res)
+ordered = boundary_cell_ids(parent, target_res, sort=True)
+# same array children_on_boundary_faces would give you, as uint64
 ```
+
+**Which sort?** Ordinary `numpy.sort` on the `uint64` array. Nothing custom: NumPy sorts integers with a **radix sort**, which never compares two cells against each other. It looks at the numbers one byte at a time — bucket all cells by their lowest byte, then by the next byte, and so on up — and after the last pass the array is in order. That is eight linear passes over memory, no comparisons, no recursion.
+
+That matters here: sorting in C++ with `std::sort` is **3.5× slower** (28 ms against 8 ms for half a million cells), because it compares pairs of cells the classic way. So the sort deliberately stays on the NumPy side, even when the cells were generated in C++.
 
 And it wins, because expanding levels in bulk and then sorting costs less than descending cell by cell:
 
 | Ordered output | 6,558 cells | 59,046 | 531,438 |
 |---|---|---|---|
 | recursive descent (C++) | 0.13 ms | 1.24 ms | 11.8 ms |
-| **bulk (C++) + sort** | **0.08 ms** | **0.73 ms** | **7.1 ms** |
-| bulk (NumPy) + sort | 0.60 ms | 1.49 ms | 8.3 ms |
+| **`boundary_cell_ids(sort=True)`** (C++ bulk) | **0.10 ms** | **0.92 ms** | **10.6 ms** |
+| same, NumPy bulk | 0.60 ms | 1.49 ms | 8.3 ms |
 | recursive descent (Python) | 4.20 ms | 36.3 ms | 337 ms |
 
-All four produce identical arrays. Both properties — that the traversal is sorted, and that sorting the bulk output reproduces it — are asserted in the test suite.
+All of them produce identical arrays. Both properties — that the traversal is sorted, and that sorting the bulk output reproduces it — are asserted in the test suite.
+
+This is why the ordered id output is not a separate function: it is the same call with `sort=True`, and the flag is literally whether that one `numpy.sort` runs.
 
 The recursive descent still has its place: it is the only one that can produce a *slice* (`boundary_range`) without generating everything first, and it streams with O(depth) memory instead of materializing the whole boundary twice.
 
@@ -327,7 +333,7 @@ So the two trade places under parallelism: bulk is far ahead serially, but order
 
 - **some cells** → `boundary_cell_at` / `boundary_range`
 - **all of them, order irrelevant** → `boundary_cell_ids` (C++ when built, NumPy otherwise)
-- **all of them, in order, as ids** → `np.sort(boundary_cell_ids(...))` — fastest, and identical to the traversal
+- **all of them, in order, as ids** → `boundary_cell_ids(..., sort=True)` — fastest, and identical to the traversal
 - **all of them, in order, as hex strings** → `children_on_boundary_faces` (see [Boundary Algorithms](algorithms.md))
 
 ---

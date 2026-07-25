@@ -72,16 +72,50 @@ except ImportError:
 # Direct boundary indexing (pure Python, backend-independent): random access
 # to the n-th boundary child and its inverse, in O(depth) arithmetic.
 from .utils import boundary_cell_at, boundary_rank, boundary_range, boundary_cell_ids
-from .utils import children_on_boundary_faces_ids
 
-# The C++ traversal can hand back raw uint64 indexes without building hex
-# strings for every cell, which is most of the cost on bulk calls.
+# The C++ bulk expansion is faster than the NumPy one at every size; the sort
+# stays on the NumPy side, which radix-sorts uint64 ~3.5x faster than
+# std::sort compares them.
 # (_h3_boundary_cpp.boundary_range_ids is the sliced equivalent, left in the
 # extension module since it has no pure-Python counterpart.)
 try:
-    from ._h3_boundary_cpp import children_on_boundary_faces_ids, boundary_cell_ids
+    from ._h3_boundary_cpp import boundary_cell_ids as _cpp_boundary_cell_ids
+
+    def boundary_cell_ids(
+        parent: str,
+        target_res: int,
+        input_faces=frozenset({1, 2, 3, 4, 5, 6}),
+        sort: bool = False,
+    ):
+        """
+        All boundary children as a NumPy uint64 array (C++-backed).
+
+        Cells are grouped by boundary state and expanded a level at a time,
+        which is the fastest way to produce a whole boundary. The result is
+        unordered by default; ``sort=True`` returns traversal order, which for
+        these cells is exactly ascending index order.
+
+        Args:
+            parent: Parent H3 cell index (hex string).
+            target_res: Resolution of the boundary children
+                (parent resolution <= target_res <= 15).
+            input_faces: Parent face numbers {1-6}; defaults to all six.
+            sort: Return traversal (ascending index) order. Needed for
+                positions to line up with :func:`boundary_rank`.
+
+        Returns:
+            ``numpy.ndarray`` of dtype uint64.
+
+        Raises:
+            ValueError: If `target_res` is out of range.
+        """
+        import numpy as np
+
+        ids = _cpp_boundary_cell_ids(parent, target_res, set(input_faces))
+        return np.sort(ids) if sort else ids
+
 except ImportError:
-    pass  # keep the pure-Python versions imported above
+    pass  # keep the pure-Python version imported above
 
 # boundary_range streams, so it stays a generator with bounded memory; when
 # the extension is present it pulls blocks from C++ instead of stepping the
@@ -324,9 +358,8 @@ __all__ = [
     "boundary_cell_at",
     "boundary_rank",
     "boundary_range",
-    # NumPy uint64 output — no per-cell hex strings
-    "children_on_boundary_faces_ids",   # traversal order
-    "boundary_cell_ids",                # unordered, fastest
+    # NumPy uint64 output — no per-cell hex strings (sort=True for order)
+    "boundary_cell_ids",
     # Geometry (pure Python / Shapely)
     "cell_boundary_to_geojson",
     "get_boundary_cells",
