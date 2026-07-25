@@ -127,52 +127,52 @@
         </div>
     </div>
 
-    <script src="demo_data.js?v=2"></script>
+    <script src="demo_data.js?v=3"></script>
     <script>
 
-        var center = [37.773, -122.418];
         var tiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        var fallbackCenter = [37.773, -122.418];
 
-        // Map 1: Original Cell
-        var map1 = L.map('map1').setView(center, 13);
-        L.tileLayer(tiles).addTo(map1);
-        L.geoJSON(cellBoundary, { style: { color: '#238636', weight: 4, fillOpacity: 0.1 } }).addTo(map1);
-
-        // Map 2: Boundary Children (Loaded from demo_data.js as 'boundaryChildren')
-        var map2 = L.map('map2').setView(center, 13); // Zoom in a bit more
-        L.tileLayer(tiles).addTo(map2);
-        // Add cell outline for reference
-        L.geoJSON(cellBoundary, { style: { color: '#238636', weight: 1, fillOpacity: 0, dashArray: '4' } }).addTo(map2);
-        // Add children cells
-        if (typeof boundaryChildren !== 'undefined') {
-            L.geoJSON(boundaryChildren, { style: { color: '#f0883e', weight: 1, fillOpacity: 0.4 } }).addTo(map2);
+        // Value from demo_data.js if it loaded, else null — guarded per
+        // variable so one missing/broken entry can't blank every map.
+        function data(name) {
+            return typeof window[name] !== 'undefined' ? window[name] : null;
         }
 
-        // Map 3: Merged Boundary (Loaded from demo_data.js as 'mergedBoundary')
-        var map3 = L.map('map3').setView(center, 13);
-        L.tileLayer(tiles).addTo(map3);
-        L.geoJSON(cellBoundary, { style: { color: '#238636', weight: 1, fillOpacity: 0, dashArray: '4' } }).addTo(map3);
-        if (typeof mergedBoundary !== 'undefined') {
-            L.geoJSON(mergedBoundary, { style: { color: '#1f6feb', weight: 3, fillOpacity: 0.3 } }).addTo(map3);
+        // Creates a map, adds every non-null [geojson, style] pair, and fits
+        // the view to the data so any cell size stays on screen.
+        function makeMap(id, layers) {
+            var map = L.map(id);
+            L.tileLayer(tiles).addTo(map);
+            var group = L.featureGroup();
+            layers.forEach(function (l) {
+                if (l[0]) L.geoJSON(l[0], { style: l[1] }).addTo(group);
+            });
+            if (group.getLayers().length) {
+                group.addTo(map);
+                map.fitBounds(group.getBounds(), { padding: [10, 10] });
+            } else {
+                map.setView(fallbackCenter, 13);
+            }
+            return map;
         }
 
-        // Map 4: Buffered Accurate
-        var map4 = L.map('map4').setView(center, 12);
-        L.tileLayer(tiles).addTo(map4);
-        L.geoJSON(cellBoundary, { style: { color: '#238636', weight: 1, fillOpacity: 0, dashArray: '4' } }).addTo(map4);
-        if (typeof bufferedAccurate !== 'undefined') {
-            L.geoJSON(bufferedAccurate, { style: { color: '#f85149', weight: 3, fillOpacity: 0.3 } }).addTo(map4);
-        }
+        var cellOutline = { color: '#238636', weight: 1, fillOpacity: 0, dashArray: '4' };
 
-        // Map 5: Buffered Fast
-        var map5 = L.map('map5').setView(center, 12);
-        L.tileLayer(tiles).addTo(map5);
-        if (typeof bufferedAccurate !== 'undefined') {
-            L.geoJSON(bufferedAccurate, { style: { color: '#f85149', weight: 1, fillOpacity: 0.1, dashArray: '4' } }).addTo(map5);
-        }
-        if (typeof bufferedFast !== 'undefined') {
-            L.geoJSON(bufferedFast, { style: { color: '#a371f7', weight: 3, fillOpacity: 0.3 } }).addTo(map5);
-        }
+        makeMap('map1', [
+            [data('cellBoundary'), { color: '#238636', weight: 4, fillOpacity: 0.1 }]]);
+        makeMap('map2', [
+            [data('cellBoundary'), cellOutline],
+            [data('boundaryChildren'), { color: '#f0883e', weight: 1, fillOpacity: 0.4 }]]);
+        makeMap('map3', [
+            [data('cellBoundary'), cellOutline],
+            [data('mergedBoundary'), { color: '#1f6feb', weight: 3, fillOpacity: 0.3 }]]);
+        makeMap('map4', [
+            [data('cellBoundary'), cellOutline],
+            [data('bufferedAccurate'), { color: '#f85149', weight: 3, fillOpacity: 0.3 }]]);
+        makeMap('map5', [
+            [data('bufferedAccurate'), { color: '#f85149', weight: 1, fillOpacity: 0.1, dashArray: '4' }],
+            [data('bufferedFast'), { color: '#a371f7', weight: 3, fillOpacity: 0.3 }]]);
     </script>
 </body>
 

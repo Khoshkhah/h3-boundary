@@ -10,7 +10,7 @@ H3 cell boundary tracing and buffered polygons across resolution hierarchies, wi
 
 ## Quick Links
 
-- [Interactive Demo](demo.md)
+- [Interactive Demo](demo.html)
 - [API Reference](api_reference.md)
 - [Concepts](concepts.md)
 - [GitHub Repository](https://github.com/Khoshkhah/h3-toolkit)
