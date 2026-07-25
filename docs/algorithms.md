@@ -104,6 +104,7 @@ for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
 
 - **Cost:** O(depth) per random access; O(depth) seek + O(1) per cell when streaming
 - **Trade-off:** for plain full generation it is not faster than approach 1 — its value is the access patterns approach 1 cannot express
+- **Full explanation:** [Boundary Indexing](indexing.md) walks through the counting formulas and a worked example
 
 ## 4. Brute force
 
