@@ -270,6 +270,8 @@ Reproduce with `python benchmarks/compare_implementations.py`.
 
 ### How each one is parallelized
 
+**The library never starts threads or processes for you.** Every function here is serial, and that is deliberate: callers are often already inside a pool (a worker process, Dask, Spark, a request handler), so a library that quietly spawned six threads per call would oversubscribe the machine, and it cannot know whether a given boundary is large enough for parallelism to pay at all. What the library does provide is the two things only it can: primitives that split cleanly, and C++ functions that **release the GIL**, so ordinary Python threads run them genuinely in parallel.
+
 Neither approach parallelizes the recursion itself — the work is *split up front*, and the two split differently.
 
 **Ordered: by index range.** This is where the counting rule earns its keep. Worker *k* takes `[lo, hi)`, seeks straight to `lo` in Δ steps, and streams its slice; no worker needs to know what the others produced, and concatenating the slices in order reproduces the traversal exactly.
