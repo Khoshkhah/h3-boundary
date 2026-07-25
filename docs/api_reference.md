@@ -114,6 +114,34 @@ Finds the coarsest ancestor (lowest resolution) where the cell still lies on at 
 
 ---
 
+### `boundary_cell_ids`
+
+```python
+boundary_cell_ids(
+    parent: str,
+    target_res: int,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
+) -> numpy.ndarray  # dtype uint64
+```
+
+All boundary children as a NumPy array of 64-bit H3 indexes, **unordered** — the fast path when you want the whole set rather than a sequence.
+
+Because order is not required, cells are grouped by boundary state and expanded a level at a time with array arithmetic instead of one Python call per node, and no per-cell hex strings are built. That makes it faster than *both* traversals:
+
+| Boundary size | `children_on_boundary_faces` (Python) | (C++) | `boundary_cell_ids` |
+|---|---|---|---|
+| 6,558 | 4.6 ms | 0.64 ms | 0.57 ms |
+| 59,046 | 38 ms | 5.4 ms | 0.77 ms |
+| 531,438 | 345 ms | 54 ms | **1.9 ms** |
+
+```python
+ids = boundary_cell_ids(parent, 13)          # numpy uint64 array
+h3i.cell_to_latlng(int(ids[0]))              # feed h3.api.basic_int directly
+hexes = [format(v, 'x') for v in ids]        # …or convert to strings if needed
+```
+
+Note the order differs from `children_on_boundary_faces`, and `boundary_rank` is defined against *that* function's order — use the ordered API when position matters. Requires NumPy, which Shapely already pulls in.
+
 ### `boundary_cell_at`
 
 ```python

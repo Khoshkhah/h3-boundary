@@ -39,7 +39,8 @@ The naive approach — generate every descendant and keep the ones touching the 
 
 | If you want to… | Use | Why |
 |---|---|---|
-| Get the whole boundary | `children_on_boundary_faces` | Fastest; the default |
+| Get the whole boundary, order matters | `children_on_boundary_faces` | The default |
+| Get the whole boundary as a set | `boundary_cell_ids` | Fastest by far; unordered uint64 array |
 | Get one cell, or a random sample | `boundary_cell_at` | O(depth), ignores boundary size entirely |
 | Know if a cell is on the boundary, and where | `boundary_rank` | O(depth) membership test + position |
 | Split the work across workers | `boundary_range` | Each worker streams its own slice, no coordination |
@@ -105,6 +106,20 @@ for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
 - **Cost:** O(depth) per random access; O(depth) seek + O(1) per cell when streaming
 - **Trade-off:** for plain full generation it is not faster than approach 1 — its value is the access patterns approach 1 cannot express
 - **Full explanation:** [Boundary Indexing](indexing.md) walks through the counting formulas and a worked example
+
+### Bulk variant: dropping the order
+
+`children_on_boundary_faces` returns cells in traversal order, and that order is what forces one Python-level step per node. If you only want the **set**, the same table logic can run a whole level at a time: group the live cells by their boundary state, and expand each group with array arithmetic. Roughly 30 vectorized operations per level replace hundreds of thousands of individual steps.
+
+`boundary_cell_ids` does this and returns a NumPy `uint64` array. It also skips building hex strings, which is what dominates at scale — that is why it beats even the C++ traversal:
+
+| Boundary size | traversal (Python) | traversal (C++) | `boundary_cell_ids` |
+|---|---|---|---|
+| 6,558 | 4.6 ms | 0.64 ms | 0.57 ms |
+| 59,046 | 38 ms | 5.4 ms | 0.77 ms |
+| 531,438 | 345 ms | 54 ms | **1.9 ms** |
+
+The trade-off is exactly the ordering: cells come out grouped by state, so `boundary_rank` (defined against traversal order) does not apply to this output.
 
 ## 4. Brute force
 

@@ -71,7 +71,7 @@ except ImportError:
 
 # Direct boundary indexing (pure Python, backend-independent): random access
 # to the n-th boundary child and its inverse, in O(depth) arithmetic.
-from .utils import boundary_cell_at, boundary_rank, boundary_range
+from .utils import boundary_cell_at, boundary_rank, boundary_range, boundary_cell_ids
 
 # boundary_range streams, so it stays a generator with bounded memory; when
 # the extension is present it pulls blocks from C++ instead of stepping the
@@ -314,6 +314,8 @@ __all__ = [
     "boundary_cell_at",
     "boundary_rank",
     "boundary_range",
+    # Unordered bulk generation (NumPy uint64 array)
+    "boundary_cell_ids",
     # Geometry (pure Python / Shapely)
     "cell_boundary_to_geojson",
     "get_boundary_cells",
