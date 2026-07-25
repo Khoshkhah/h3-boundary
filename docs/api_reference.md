@@ -164,7 +164,9 @@ for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
 
 Concatenating the slices reproduces `children_on_boundary_faces` exactly. Repeatedly calling `boundary_cell_at` instead would re-descend the tree per cell (~9x slower for bulk work).
 
-All three indexing functions are pure Python and backend-independent.
+`boundary_cell_at` and `boundary_rank` are pure Python. `boundary_range` uses the C++ extension when it is available (fetching cells in blocks, so it stays a lazy generator with bounded memory) and falls back to the pure-Python generator otherwise — roughly 14x apart on bulk work.
+
+See [Boundary Algorithms](algorithms.md) for how these relate to the traversal and the boundary walk, with benchmarks.
 
 ---
 

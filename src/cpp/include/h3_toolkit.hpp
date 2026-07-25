@@ -49,6 +49,24 @@ H3Index cell_to_coarsest_ancestor_on_faces(H3Index h, const std::set<int>& input
 std::vector<H3Index> boundary_walk(H3Index parent, int target_res);
 
 /**
+ * Returns boundary children [start, stop) in traversal order — the slice of
+ * children_on_boundary_faces(parent, target_res, input_faces) without
+ * building the rest. Subtrees entirely before `start` are skipped using
+ * precomputed per-state counts, so the seek is O(depth) and the rest is
+ * O(1) per emitted cell.
+ *
+ * @param start First index to emit (clamped to 0).
+ * @param stop One past the last index; negative or too large means the end.
+ */
+std::vector<H3Index> boundary_range(
+    H3Index parent,
+    int target_res,
+    int64_t start = 0,
+    int64_t stop = -1,
+    const std::set<int>& input_faces = {1,2,3,4,5,6}
+);
+
+/**
  * Returns the cell boundary as a vector of (lon, lat) pairs.
  */
 std::vector<std::pair<double, double>> cell_boundary(H3Index cell);

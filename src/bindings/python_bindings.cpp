@@ -80,6 +80,22 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
           nogil,
           "Returns all children at target_res that lie on parent's boundary faces.");
 
+    m.def("boundary_range",
+          [](const std::string& parent_str, int target_res, int64_t start,
+             int64_t stop, const std::set<int>& input_faces) {
+              auto cells = h3_toolkit::boundary_range(
+                  string_to_h3(parent_str), target_res, start, stop, input_faces);
+              std::vector<std::string> result;
+              result.reserve(cells.size());
+              for (H3Index c : cells) result.push_back(h3_to_string(c));
+              return result;
+          },
+          py::arg("parent"), py::arg("target_res"), py::arg("start") = 0,
+          py::arg("stop") = -1, py::arg("input_faces") = ALL_FACES,
+          nogil,
+          "Boundary children [start, stop) in traversal order, skipping the "
+          "preceding subtrees via per-state counts.");
+
     m.def("boundary_walk",
           [](const std::string& parent_str, int target_res) {
               auto cells = h3_toolkit::boundary_walk(string_to_h3(parent_str), target_res);

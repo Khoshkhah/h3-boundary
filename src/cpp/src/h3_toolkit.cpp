@@ -393,6 +393,136 @@ public:
     }
 };
 
+// ---------------------------------------------------------------------------
+// Ranged boundary generation
+// ---------------------------------------------------------------------------
+// The boundary children of a cell form a positional numeral system: each one
+// is a base-7 digit string accepted by the face-state automaton whose
+// transitions are the REV_* tables. Counting accepted suffixes per state lets
+// a descent skip whole subtrees that fall before `start`, so an arbitrary
+// slice costs O(depth) to reach plus O(1) per emitted cell.
+
+static constexpr int HEX_DIGITS[7] = {0, 1, 2, 3, 4, 5, 6};
+static constexpr int PENT_DIGITS[6] = {0, 2, 3, 4, 5, 6};  // pentagons skip digit 1
+
+/// Faces of the child at child_pos that remain on the traced boundary.
+static inline uint8_t map_faces(uint8_t faces, const uint8_t rev[7][7], int child_pos) {
+    uint8_t mapped = 0;
+    for (int f = 1; f <= 6; ++f) {
+        if (faces & (1 << f)) mapped |= rev[child_pos][f];
+    }
+    return mapped;
+}
+
+/// counts[k][mask] = boundary descendants k levels below a (non-pentagon)
+/// node whose boundary state is `mask`. Parity is fixed by k and target_res.
+static void fill_counts(int depth, int target_res,
+                        std::vector<std::array<uint64_t, 128>>& counts) {
+    counts.assign(depth + 1, std::array<uint64_t, 128>{});
+    for (int m = 0; m < 128; ++m) counts[0][m] = 1;
+    for (int k = 1; k <= depth; ++k) {
+        int parity = (target_res - k + 1) % 2;
+        for (int m = 0; m < 128; ++m) {
+            uint64_t total = 0;
+            for (int cp = 0; cp < 7; ++cp) {
+                uint8_t mapped = map_faces(static_cast<uint8_t>(m), REV_HEX[parity], cp);
+                if (mapped) total += counts[k - 1][mapped];
+            }
+            counts[k][m] = total;
+        }
+    }
+}
+
+namespace {
+struct RangeCtx {
+    int target_res;
+    int64_t skip;
+    int64_t take;
+    const std::vector<std::array<uint64_t, 128>>* counts;
+    std::vector<H3Index>* out;
+};
+}  // namespace
+
+static void range_descend(H3Index v, int res, uint8_t faces, bool is_pent, RangeCtx& c) {
+    if (c.take <= 0) return;
+    if (res == c.target_res) {
+        if (c.skip > 0) { --c.skip; return; }
+        c.out->push_back(v);
+        --c.take;
+        return;
+    }
+
+    const int child_res = res + 1;
+    const int parity = child_res % 2;
+    const uint8_t (*rev)[7] = is_pent ? REV_PENT[parity] : REV_HEX[parity];
+    const int shift = (15 - child_res) * 3;
+    // Child with digit 0: bump the resolution field, clear the filler digit.
+    const H3Index base = v + (1ULL << 52) - (7ULL << shift);
+    const int* digits = is_pent ? PENT_DIGITS : HEX_DIGITS;
+    const int ndigits = is_pent ? 6 : 7;
+    const int below = c.target_res - child_res;
+
+    for (int cp = 0; cp < ndigits; ++cp) {
+        uint8_t mapped = map_faces(faces, rev, cp);
+        if (!mapped) continue;
+        if (c.skip > 0) {
+            uint64_t count = (*c.counts)[below][mapped];
+            if (static_cast<int64_t>(count) <= c.skip) {  // whole subtree precedes start
+                c.skip -= static_cast<int64_t>(count);
+                continue;
+            }
+        }
+        range_descend(base + (static_cast<H3Index>(digits[cp]) << shift),
+                      child_res, mapped, false, c);
+        if (c.take <= 0) return;
+    }
+}
+
+std::vector<H3Index> boundary_range(H3Index parent, int target_res,
+                                    int64_t start, int64_t stop,
+                                    const std::set<int>& input_faces) {
+    int res_parent = getResolution(parent);
+    if (target_res < res_parent) {
+        throw std::invalid_argument("target_res must be greater than or equal to parent cell resolution");
+    }
+    if (target_res > 15) {
+        throw std::invalid_argument("target_res must be <= 15");
+    }
+
+    std::vector<H3Index> out;
+    uint8_t faces = faces_to_mask(input_faces);
+    if (!faces) return out;
+
+    const int depth = target_res - res_parent;
+    const bool is_pent = isPentagon(parent);
+    std::vector<std::array<uint64_t, 128>> counts;
+    fill_counts(depth, target_res, counts);
+
+    uint64_t total;
+    if (depth == 0) {
+        total = 1;
+    } else if (is_pent) {
+        total = 0;
+        const int parity = (res_parent + 1) % 2;
+        for (int cp = 0; cp < 6; ++cp) {
+            uint8_t mapped = map_faces(faces, REV_PENT[parity], cp);
+            if (mapped) total += counts[depth - 1][mapped];
+        }
+    } else {
+        total = counts[depth][faces];
+    }
+
+    if (start < 0) start = 0;
+    if (stop < 0 || static_cast<uint64_t>(stop) > total) stop = static_cast<int64_t>(total);
+    int64_t take = stop - start;
+    if (take <= 0) return out;
+
+    out.reserve(static_cast<size_t>(take));
+    RangeCtx ctx{target_res, start, take, &counts, &out};
+    range_descend(parent, res_parent, faces, is_pent, ctx);
+    return out;
+}
+
 /// Table-free boundary enumeration by wall-following; see header. Exists to
 /// verify the table-driven traversal with an independent algorithm.
 std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {

@@ -73,6 +73,59 @@ except ImportError:
 # to the n-th boundary child and its inverse, in O(depth) arithmetic.
 from .utils import boundary_cell_at, boundary_rank, boundary_range
 
+# boundary_range streams, so it stays a generator with bounded memory; when
+# the extension is present it pulls blocks from C++ instead of stepping the
+# tree in Python (same order, same laziness, ~10x faster).
+try:
+    from ._h3_boundary_cpp import boundary_range as _cpp_boundary_range
+
+    _RANGE_CHUNK = 8192
+
+    def boundary_range(
+        parent: str,
+        target_res: int,
+        start: int = 0,
+        stop: int = None,
+        input_faces=frozenset({1, 2, 3, 4, 5, 6}),
+    ):
+        """
+        Yields boundary children ``[start, stop)`` in traversal order.
+
+        C++-backed generator: seeks to `start` in O(depth), then streams
+        forward, fetching cells in blocks so memory stays bounded no matter
+        how large the slice is. Concatenating disjoint ranges reproduces
+        ``children_on_boundary_faces`` exactly, which is what makes
+        coordination-free sharding across workers possible.
+
+        Args:
+            parent: Parent H3 cell index (hex string).
+            target_res: Resolution of the boundary children
+                (parent resolution <= target_res <= 15).
+            start: First index to yield (clamped to 0).
+            stop: One past the last index; None (default) means the end.
+            input_faces: Parent face numbers {1-6}; defaults to all six.
+
+        Yields:
+            H3 indexes (hex strings), in traversal order.
+
+        Raises:
+            ValueError: If `target_res` is out of range.
+        """
+        n = max(start, 0)
+        faces = set(input_faces)
+        while stop is None or n < stop:
+            want = _RANGE_CHUNK if stop is None else min(_RANGE_CHUNK, stop - n)
+            block = _cpp_boundary_range(parent, target_res, n, n + want, faces)
+            if not block:
+                return
+            yield from block
+            n += len(block)
+            if len(block) < want:  # hit the end of the boundary
+                return
+
+except ImportError:
+    pass  # keep the pure-Python generator from utils
+
 # Pure Python geometry implementations (use Shapely)
 from .geom import (
     cell_boundary_to_geojson,
