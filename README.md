@@ -34,7 +34,7 @@ Visit the **[Full Documentation](https://khoshkhah.github.io/h3-toolkit/)** to e
 
 You can also run the demo locally using the provided Jupyter Notebook:
 ```bash
-jupyter notebook docs/demo_generation.ipynb
+jupyter notebook notebook/demo_generation.ipynb
 ```
 
 ## Installation
