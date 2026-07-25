@@ -200,18 +200,54 @@ for cell in boundary_range(parent, target_res, lo, hi):
 | `boundary_rank` | same | 0.011 ms |
 | `boundary_range` (slice) | Δ-step seek + O(1) per cell | 0.025 ms for 100 cells |
 
-Δ is at most 15, so **every** lookup is bounded by roughly 100 arithmetic operations. The boundary's size never enters the cost — 0.011 ms whether it holds 78 cells or 531,438.
+Δ is at most 15, so **every** lookup is bounded by roughly 100 arithmetic operations. The boundary's size never enters the cost — 0.011 ms whether it holds 78 cells or 531,438. That flatness is the whole point, and it is what the next section contrasts against.
 
-The one thing this is *not* best at: generating the whole boundary. Indexing re-descends from the parent for each cell, while the bulk functions share that work between cells — at 531,438 cells they are far ahead:
+---
 
-| Whole boundary | Time |
-|---|---|
-| `boundary_cell_ids` (unordered, uint64) | 1.9 ms |
-| `children_on_boundary_faces_ids` (ordered, uint64) | 12 ms |
-| `children_on_boundary_faces` (ordered, hex strings) | 56 ms |
-| `boundary_cell_at` in a loop | ~5,900 ms (0.011 ms x 531,438) |
+## Generating the whole boundary
 
-Use indexing when you want *some* cells; use the bulk functions when you want *all* of them.
+Indexing gives you *one* cell fast. Asking it for every cell in turn is the wrong tool — each call re-descends from the parent, so the Δ-step cost is paid N times over. Two better routes exist, and they differ in whether you need the cells **in order**.
+
+### Ordered: let the traversal emit them
+
+`children_on_boundary_faces` walks the same live subtree once, emitting cells as it reaches them. Prefix work is shared between neighbours instead of repeated, so it is hundreds of times faster than the indexing loop. `children_on_boundary_faces_ids` is the same walk returning `uint64` instead of hex strings — text formatting alone is most of the cost at scale.
+
+### Unordered: expand a level at a time
+
+If the order doesn't matter, the same state machine can run in **bulk**. Instead of visiting cells one at a time, group all live cells by their state and expand each group in one array operation:
+
+```
+level k:   {1,4,5}: [ 12,000 cells ]   {4,6}: [ 8,000 cells ]   {2}: [ 5,000 cells ]
+                ↓ one vectorized add per surviving digit          ↓
+level k+1: {1,3}:   [ 30,000 cells ]   {5}:   [ 18,000 cells ]   …
+```
+
+Every cell in a group shares the same state, so it shares the same set of valid digits — one addition over the whole array replaces a Python step per cell. About 30 array operations per level replace hundreds of thousands of individual ones. That is `boundary_cell_ids`, and it returns a NumPy `uint64` array with cells grouped by state.
+
+### Measured
+
+Same machine, one run. "Descendants" is what brute force would have to touch.
+
+| Method | Order | 240 cells | 6,558 cells | 531,438 cells |
+|---|---|---|---|---|
+| `children_on_boundary_faces_ids` (C++) | yes | **0.01 ms** | **0.20 ms** | 13 ms |
+| `boundary_cell_ids` (bulk) | no | 0.23 ms | 0.79 ms | **1.8 ms** |
+| `boundary_range` (streaming, hex) | yes | 0.03 ms | 0.65 ms | 54 ms |
+| `children_on_boundary_faces` (C++, hex) | yes | 0.02 ms | 0.62 ms | 54 ms |
+| `children_on_boundary_faces` (Python, hex) | yes | 0.15 ms | 4.5 ms | 357 ms |
+| boundary walk (C++) | no | 0.04 ms | 1.4 ms | 190 ms |
+| **`boundary_cell_at` in a loop** | yes | 1.5 ms | 72 ms | ~5,800 ms |
+| brute force | no | 7.8 ms | 3,048 ms | — |
+
+Two things to read off it:
+
+- **The indexing loop is the slowest sane option** — 3,000× behind the ordered traversal at half a million cells. Use indexing for *some* cells, never for all of them.
+- **Bulk wins only when the boundary is big.** Below roughly 50,000 cells the C++ traversal is ahead (NumPy's per-operation overhead dominates when the arrays are small); above it, vectorization takes over and keeps pulling away:
+
+  | Cells | 240 | 2,184 | 6,558 | 59,046 | 177,144 | 531,438 |
+  |---|---|---|---|---|---|---|
+  | C++ ids | **0.01** | **0.05** | **0.14** | 1.40 | 4.81 | 15.4 |
+  | bulk (NumPy) | 0.23 | 0.44 | 0.51 | **1.13** | **3.32** | **2.40** |
 
 ---
 
@@ -223,6 +259,14 @@ from h3_boundary import boundary_cell_at, boundary_rank, boundary_range
 boundary_cell_at(parent, target_res, n, input_faces={1,2,3,4,5,6}) -> str
 boundary_rank(parent, cell, input_faces={1,2,3,4,5,6}) -> int
 boundary_range(parent, target_res, start=0, stop=None, input_faces={1,2,3,4,5,6}) -> Iterator[str]
+```
+
+For whole boundaries, use these instead:
+
+```python
+from h3_boundary import children_on_boundary_faces      # ordered, hex strings
+from h3_boundary import children_on_boundary_faces_ids  # ordered, uint64 array
+from h3_boundary import boundary_cell_ids               # unordered, uint64 array
 ```
 
 - `input_faces` restricts the traversal to part of the boundary; it must match across calls for ranks to line up.

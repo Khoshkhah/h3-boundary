@@ -146,13 +146,16 @@ boundary_cell_ids(
 
 All boundary children as a NumPy array of 64-bit H3 indexes, **unordered** — the fast path when you want the whole set rather than a sequence.
 
-Because order is not required, cells are grouped by boundary state and expanded a level at a time with array arithmetic instead of one Python call per node, and no per-cell hex strings are built. That makes it faster than *both* traversals:
+Because order is not required, cells are grouped by boundary state and expanded a level at a time with array arithmetic instead of one Python call per node, and no per-cell hex strings are built:
 
-| Boundary size | `children_on_boundary_faces` (Python) | (C++) | `boundary_cell_ids` |
-|---|---|---|---|
-| 6,558 | 4.6 ms | 0.64 ms | 0.57 ms |
-| 59,046 | 38 ms | 5.4 ms | 0.77 ms |
-| 531,438 | 345 ms | 54 ms | **1.9 ms** |
+| Boundary size | `children_on_boundary_faces` (Python) | (C++) | `children_on_boundary_faces_ids` | `boundary_cell_ids` |
+|---|---|---|---|---|
+| 240 | 0.15 ms | 0.02 ms | **0.01 ms** | 0.23 ms |
+| 6,558 | 4.5 ms | 0.62 ms | **0.20 ms** | 0.79 ms |
+| 59,046 | 38 ms | 5.4 ms | 1.40 ms | **1.13 ms** |
+| 531,438 | 357 ms | 54 ms | 13 ms | **1.8 ms** |
+
+The vectorized path only pays off on large boundaries — below roughly **50,000 cells** NumPy's per-operation overhead makes the C++ traversal faster; above it, this wins by up to 7×.
 
 ```python
 ids = boundary_cell_ids(parent, 13)          # numpy uint64 array

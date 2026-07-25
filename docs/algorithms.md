@@ -41,7 +41,7 @@ The naive approach — generate every descendant and keep the ones touching the 
 |---|---|---|
 | Get the whole boundary as hex strings | `children_on_boundary_faces` | The default |
 | …as integers, same order | `children_on_boundary_faces_ids` | 4–5× faster; skips string formatting |
-| …as a set, order irrelevant | `boundary_cell_ids` | Fastest by far; unordered uint64 array |
+| …as a set, order irrelevant | `boundary_cell_ids` | Wins on large boundaries (≳50k cells) |
 | Get one cell, or a random sample | `boundary_cell_at` | O(depth), ignores boundary size entirely |
 | Know if a cell is on the boundary, and where | `boundary_rank` | O(depth) membership test + position |
 | Split the work across workers | `boundary_range` | Each worker streams its own slice, no coordination |
@@ -120,15 +120,16 @@ Two things dominate large calls, and neither is the algorithm:
 
 `children_on_boundary_faces` returns cells in traversal order, and that order is what forces one Python-level step per node. If you only want the **set**, the same table logic can run a whole level at a time: group the live cells by their boundary state, and expand each group with array arithmetic. Roughly 30 vectorized operations per level replace hundreds of thousands of individual steps.
 
-`boundary_cell_ids` does this and returns a NumPy `uint64` array. It also skips building hex strings, which is what dominates at scale — that is why it beats even the C++ traversal:
+`boundary_cell_ids` does this and returns a NumPy `uint64` array, cells grouped by state:
 
-| Boundary size | traversal (Python) | traversal (C++) | `boundary_cell_ids` |
-|---|---|---|---|
-| 6,558 | 4.6 ms | 0.64 ms | 0.57 ms |
-| 59,046 | 38 ms | 5.4 ms | 0.77 ms |
-| 531,438 | 345 ms | 54 ms | **1.9 ms** |
+| Boundary size | traversal, hex (Python) | traversal, hex (C++) | traversal, ids (C++) | `boundary_cell_ids` |
+|---|---|---|---|---|
+| 240 | 0.15 ms | 0.02 ms | **0.01 ms** | 0.23 ms |
+| 6,558 | 4.5 ms | 0.62 ms | **0.20 ms** | 0.79 ms |
+| 59,046 | 38 ms | 5.4 ms | 1.40 ms | **1.13 ms** |
+| 531,438 | 357 ms | 54 ms | 13 ms | **1.8 ms** |
 
-The trade-off is exactly the ordering: cells come out grouped by state, so `boundary_rank` (defined against traversal order) does not apply to this output.
+Vectorizing only pays once the arrays are large: below roughly **50,000 cells** NumPy's per-operation overhead makes the C++ traversal faster, and above it the bulk path pulls away (7× at half a million cells). The trade-off is the ordering — cells come out grouped by state, so `boundary_rank` (defined against traversal order) does not apply to this output.
 
 ## 4. Brute force
 
