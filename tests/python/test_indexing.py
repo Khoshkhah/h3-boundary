@@ -5,7 +5,7 @@ boundary children, exactly reproducing the traversal's depth-first order.
 import h3
 import pytest
 
-from h3_boundary import boundary_cell_at, boundary_rank
+from h3_boundary import boundary_cell_at, boundary_rank, boundary_range
 from h3_boundary.utils import children_on_boundary_faces
 
 SF_RES6 = h3.latlng_to_cell(37.7759, -122.4180, 6)
@@ -58,9 +58,51 @@ def test_random_access_without_enumeration():
         boundary_cell_at(parent, 13, total)
 
 
+@pytest.mark.parametrize("parent,target_res", CASES)
+def test_range_full_matches_traversal(parent, target_res):
+    assert list(boundary_range(parent, target_res)) == \
+        children_on_boundary_faces(parent, target_res)
+
+
+@pytest.mark.parametrize("parent,target_res", CASES)
+@pytest.mark.parametrize("n_shards", [2, 3, 7])
+def test_shards_concatenate_to_traversal(parent, target_res, n_shards):
+    """The sharding guarantee: independent slices, reassembled, equal the
+    traversal exactly — no gaps, no overlaps, no reordering."""
+    cells = children_on_boundary_faces(parent, target_res)
+    total = len(cells)
+    bounds = [(total * k) // n_shards for k in range(n_shards + 1)]
+    shards = [
+        list(boundary_range(parent, target_res, bounds[k], bounds[k + 1]))
+        for k in range(n_shards)
+    ]
+    assert [c for shard in shards for c in shard] == cells
+    assert sum(len(s) for s in shards) == total
+
+
+@pytest.mark.parametrize("start,stop", [(0, 1), (5, 5), (10, 3), (-5, 4), (0, 10**6)])
+def test_range_edge_slices(start, stop):
+    cells = children_on_boundary_faces(SF_RES6, 8)
+    expected = cells[max(start, 0):max(stop, 0)]
+    assert list(boundary_range(SF_RES6, 8, start, stop)) == expected
+
+
+def test_range_seeks_without_enumerating():
+    """A slice deep inside the 531,438-cell res2->13 boundary."""
+    parent = h3.latlng_to_cell(37.7759, -122.4180, 2)
+    total = 3 ** 12 - 3
+    start = total // 2
+    got = list(boundary_range(parent, 13, start, start + 50))
+    assert len(got) == 50
+    assert got[0] == boundary_cell_at(parent, 13, start)
+    assert got[-1] == boundary_cell_at(parent, 13, start + 49)
+    assert [boundary_rank(parent, c) for c in got] == list(range(start, start + 50))
+
+
 def test_equal_resolution():
     assert boundary_cell_at(SF_RES6, 6, 0) == SF_RES6
     assert boundary_rank(SF_RES6, SF_RES6) == 0
+    assert list(boundary_range(SF_RES6, 6)) == [SF_RES6]
 
 
 def test_out_of_range_index():

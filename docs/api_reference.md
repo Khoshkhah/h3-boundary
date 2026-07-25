@@ -142,7 +142,29 @@ boundary_rank(parent: str, cell: str, input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
 
 Inverse of `boundary_cell_at`: the position of `cell` in the parent's boundary sequence (depth-first traversal order), in O(depth). Doubles as a membership test — raises `ValueError` if `cell` is not a descendant of `parent` or not on the traced boundary.
 
-Both functions are pure Python and backend-independent.
+### `boundary_range`
+
+```python
+boundary_range(
+    parent: str,
+    target_res: int,
+    start: int = 0,
+    stop: int | None = None,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6}
+) -> Iterator[str]
+```
+
+Yields boundary children `[start, stop)` in traversal order: seeks to `start` in O(depth), then streams forward at traversal speed (O(1) amortized per cell, O(depth) memory). This is the bulk counterpart of the indexing functions — use it to shard a boundary across workers with no coordination, or to stream a boundary too large to hold in memory.
+
+```python
+# Worker k of n generates only its own slice
+for cell in boundary_range(parent, 13, bounds[k], bounds[k + 1]):
+    process(cell)
+```
+
+Concatenating the slices reproduces `children_on_boundary_faces` exactly. Repeatedly calling `boundary_cell_at` instead would re-descend the tree per cell (~9x slower for bulk work).
+
+All three indexing functions are pure Python and backend-independent.
 
 ---
 

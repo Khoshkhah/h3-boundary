@@ -71,7 +71,7 @@ except ImportError:
 
 # Direct boundary indexing (pure Python, backend-independent): random access
 # to the n-th boundary child and its inverse, in O(depth) arithmetic.
-from .utils import boundary_cell_at, boundary_rank
+from .utils import boundary_cell_at, boundary_rank, boundary_range
 
 # Pure Python geometry implementations (use Shapely)
 from .geom import (
@@ -260,6 +260,7 @@ __all__ = [
     # Direct boundary indexing (pure Python)
     "boundary_cell_at",
     "boundary_rank",
+    "boundary_range",
     # Geometry (pure Python / Shapely)
     "cell_boundary_to_geojson",
     "get_boundary_cells",

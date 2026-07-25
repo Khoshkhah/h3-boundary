@@ -424,6 +424,124 @@ def boundary_cell_at(
     return format(v, 'x')
 
 
+def _next_boundary_child(
+    base: int, faces: frozenset, is_pent: bool, child_res: int, from_pos: int
+):
+    """First boundary child at position >= from_pos.
+
+    Returns (child_index, child_faces, next_pos) or None. `base` is the
+    child-with-digit-0 index (resolution field bumped, filler digit cleared).
+    """
+    parity = child_res % 2
+    shift = (15 - child_res) * 3
+    digits = _PENT_DIGITS if is_pent else _HEX_DIGITS
+    for child_pos in range(from_pos, len(digits)):
+        mapped = _mapped_faces(faces, parity, child_pos, is_pent)
+        if mapped:
+            return base + (digits[child_pos] << shift), mapped, child_pos + 1
+    return None
+
+
+def boundary_range(
+    parent: str,
+    target_res: int,
+    start: int = 0,
+    stop: Optional[int] = None,
+    input_faces: Set[int] = {1, 2, 3, 4, 5, 6},
+):
+    """
+    Yields boundary children ``[start, stop)`` in traversal order.
+
+    Seeks to `start` in O(depth) (as :func:`boundary_cell_at` does), then
+    streams forward at traversal speed — O(1) amortized per cell, O(depth)
+    memory. This is the bulk counterpart of the indexing functions: workers
+    can each generate their own slice of a boundary with no coordination and
+    no shared state, and concatenating the slices reproduces
+    :func:`children_on_boundary_faces` exactly.
+
+    Args:
+        parent: Parent H3 cell index (hex string).
+        target_res: Resolution of the boundary children
+            (parent resolution <= target_res <= 15).
+        start: First index to yield (clamped to 0).
+        stop: One past the last index; None (default) means the end.
+        input_faces: Parent face numbers {1-6} to cover; defaults to all six.
+
+    Yields:
+        H3 indexes (hex strings), in the same order as
+        ``children_on_boundary_faces(parent, target_res, input_faces)``.
+
+    Raises:
+        ValueError: If `target_res` is out of range.
+    """
+    res_parent = h3.get_resolution(parent)
+    if target_res < res_parent:
+        raise ValueError("target_res must be greater than or equal to parent cell resolution.")
+    if target_res > 15:
+        raise ValueError("target_res must be <= 15.")
+
+    faces = frozenset(input_faces)
+    is_pent = h3.is_pentagon(parent)
+    total = _subtree_count(faces, res_parent, target_res, is_pent) if faces else 0
+    if stop is None or stop > total:
+        stop = total
+    start = max(start, 0)
+    remaining = stop - start
+    if remaining <= 0:
+        return
+
+    # Seek to `start`, recording resume points: each frame is the branch state
+    # of one level, so streaming can continue from where the descent left off.
+    stack = []  # (base, parent_faces, parent_is_pent, next_pos, child_res)
+    v = int(parent, 16)
+    n = start
+    for res in range(res_parent, target_res):
+        child_res = res + 1
+        shift = (15 - child_res) * 3
+        base = v + (1 << 52) - (7 << shift)
+        pos = 0
+        while True:
+            step = _next_boundary_child(base, faces, is_pent, child_res, pos)
+            child_v, mapped, next_pos = step
+            count = _subtree_count(mapped, child_res, target_res, False)
+            if n < count:
+                stack.append((base, faces, is_pent, next_pos, child_res))
+                v, faces, is_pent = child_v, mapped, False
+                break
+            n -= count
+            pos = next_pos
+
+    while True:
+        yield format(v, 'x')
+        remaining -= 1
+        if remaining <= 0:
+            return
+
+        # Advance to the next leaf: unwind to the nearest level with an
+        # unvisited branch, then descend leftmost from there.
+        step = None
+        while stack:
+            base, p_faces, p_is_pent, next_pos, child_res = stack.pop()
+            step = _next_boundary_child(base, p_faces, p_is_pent, child_res, next_pos)
+            if step:
+                child_v, mapped, next_pos = step
+                stack.append((base, p_faces, p_is_pent, next_pos, child_res))
+                v, faces, is_pent = child_v, mapped, False
+                break
+        if not step:
+            return
+
+        for res in range(child_res, target_res):
+            next_res = res + 1
+            shift = (15 - next_res) * 3
+            base = v + (1 << 52) - (7 << shift)
+            child_v, mapped, next_pos = _next_boundary_child(
+                base, faces, is_pent, next_res, 0
+            )
+            stack.append((base, faces, is_pent, next_pos, next_res))
+            v, faces, is_pent = child_v, mapped, False
+
+
 def boundary_rank(
     parent: str,
     cell: str,
