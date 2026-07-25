@@ -21,6 +21,8 @@ H3 cell boundary tracing and buffered polygons across resolution hierarchies, wi
 
 h3-boundary extends Uber's H3 library with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons.
 
+![A resolution-5 H3 cell with its 78 boundary children at resolution 8 highlighted, and its 265 interior children greyed out](assets/boundary_children.png)
+
 ### Key Features
 
 **Boundary-only traversal**

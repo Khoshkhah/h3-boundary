@@ -7,6 +7,16 @@ h3-boundary extends [Uber's H3 library](https://h3geo.org/) with efficient algor
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Khoshkhah/h3-toolkit/master/docs/assets/boundary_children.png"
+       alt="A resolution-5 H3 cell with its 78 boundary children at resolution 8 highlighted, and its 265 interior children greyed out"
+       width="720">
+</p>
+
+```python
+children = h3b.children_on_boundary_faces(cell, target_res)   # just the ring
+```
+
 ## Features
 
 - **Boundary-only traversal**: enumerate the children on a parent's boundary without materializing its interior — cost scales with the perimeter, not the area
