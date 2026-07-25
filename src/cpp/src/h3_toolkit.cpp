@@ -322,6 +322,77 @@ static multi_polygon_type union_cells(const std::vector<H3Index>& cells,
     return parts.empty() ? multi_polygon_type{} : std::move(parts.front());
 }
 
+// Minimal open-addressing hash set for H3 indexes: linear probing,
+// power-of-two capacity, 0 as the empty sentinel (0 is never a valid cell).
+// Replaces std::unordered_set in the walk's hot loop — no per-node
+// allocation, cache-friendly probes.
+class FlatSet {
+    std::vector<H3Index> slots_;
+    size_t mask_;
+    size_t count_ = 0;
+
+    static size_t hash(H3Index v) {
+        v ^= v >> 33;
+        v *= 0xff51afd7ed558ccdULL;
+        v ^= v >> 33;
+        return static_cast<size_t>(v);
+    }
+
+    void grow() {
+        std::vector<H3Index> old;
+        old.swap(slots_);
+        slots_.assign(old.size() * 2, 0);
+        mask_ = slots_.size() - 1;
+        for (H3Index v : old) {
+            if (v) {
+                size_t i = hash(v) & mask_;
+                while (slots_[i]) i = (i + 1) & mask_;
+                slots_[i] = v;
+            }
+        }
+    }
+
+public:
+    explicit FlatSet(size_t expected) {
+        size_t cap = 64;
+        while (cap < expected * 2) cap <<= 1;
+        slots_.assign(cap, 0);
+        mask_ = cap - 1;
+    }
+
+    bool insert(H3Index v) {
+        if ((count_ + 1) * 4 > slots_.size() * 3) grow();
+        size_t i = hash(v) & mask_;
+        while (slots_[i]) {
+            if (slots_[i] == v) return false;
+            i = (i + 1) & mask_;
+        }
+        slots_[i] = v;
+        ++count_;
+        return true;
+    }
+
+    bool contains(H3Index v) const {
+        size_t i = hash(v) & mask_;
+        while (slots_[i]) {
+            if (slots_[i] == v) return true;
+            i = (i + 1) & mask_;
+        }
+        return false;
+    }
+
+    size_t size() const { return count_; }
+
+    std::vector<H3Index> to_vector() const {
+        std::vector<H3Index> out;
+        out.reserve(count_);
+        for (H3Index v : slots_) {
+            if (v) out.push_back(v);
+        }
+        return out;
+    }
+};
+
 /// Table-free boundary enumeration by wall-following; see header. Exists to
 /// verify the table-driven traversal with an independent algorithm.
 std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
@@ -391,7 +462,12 @@ std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
     // inside neighbor consecutive to an outside neighbor shares an edge with
     // that outside cell and is boundary by construction — one ring call per
     // boundary cell. Pentagon-distorted rings fall back to probing.
-    std::unordered_set<H3Index> result{start};
+    // Boundary count grows ~sqrt(7) per level; the estimate just seeds the
+    // flat set's capacity (it grows if undersized).
+    size_t expected = 6;
+    for (int r = parent_res; r < target_res - 1; ++r) expected = (expected * 8) / 3;
+    FlatSet result(expected);
+    result.insert(start);
     std::vector<H3Index> stack{start};
     while (!stack.empty()) {
         H3Index v = stack.back();
@@ -408,7 +484,7 @@ std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
             for (int i = 0; i < 6; ++i) ins[i] = inside(ring[i]);
             for (int i = 0; i < 6; ++i) {
                 if (ins[i] && (!ins[(i + 5) % 6] || !ins[(i + 1) % 6])
-                        && result.insert(ring[i]).second) {
+                        && result.insert(ring[i])) {
                     stack.push_back(ring[i]);
                 }
             }
@@ -416,7 +492,7 @@ std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
             H3Index nbrs[7];
             int n = disk_neighbors(v, nbrs);
             for (int i = 0; i < n; ++i) {
-                if (result.count(nbrs[i]) == 0 && probe_is_boundary(nbrs[i])) {
+                if (!result.contains(nbrs[i]) && probe_is_boundary(nbrs[i])) {
                     result.insert(nbrs[i]);
                     stack.push_back(nbrs[i]);
                 }
@@ -424,7 +500,7 @@ std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
         }
     }
 
-    return std::vector<H3Index>(result.begin(), result.end());
+    return result.to_vector();
 }
 
 /// Returns the cell's own boundary as a closed (lon, lat) ring in degrees.
