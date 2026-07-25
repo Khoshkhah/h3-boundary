@@ -124,6 +124,20 @@ def test_children_below_parent_res_raises_both():
         cpp.children_on_boundary_faces(SF_RES6, 5)
 
 
+@pytest.mark.parametrize("parent,target_res", [
+    (SF_RES6, 9),
+    (HEX_RES1, 4),
+    (PENT_RES0, 2),
+    (PENT_RES0, 4),
+])
+def test_boundary_walk_verifies_tables(parent, target_res):
+    """boundary_walk shares no code or tables with the traversal — agreement
+    is independent evidence the face tables are right (all-faces case)."""
+    walked = set(cpp.boundary_walk(parent, target_res))
+    assert walked == set(cpp.children_on_boundary_faces(parent, target_res))
+    assert walked == set(py_utils.children_on_boundary_faces(parent, target_res))
+
+
 # ---------------------------------------------------------------------------
 # trace functions
 # ---------------------------------------------------------------------------

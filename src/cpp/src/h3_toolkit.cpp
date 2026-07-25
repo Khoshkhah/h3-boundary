@@ -19,7 +19,9 @@
 #include "h3_toolkit.hpp"
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <stdexcept>
+#include <unordered_set>
 #include <cmath>
 
 // Boost.Geometry for polygon buffering and union operations
@@ -318,6 +320,111 @@ static multi_polygon_type union_cells(const std::vector<H3Index>& cells,
         parts = std::move(next);
     }
     return parts.empty() ? multi_polygon_type{} : std::move(parts.front());
+}
+
+/// Table-free boundary enumeration by wall-following; see header. Exists to
+/// verify the table-driven traversal with an independent algorithm.
+std::vector<H3Index> boundary_walk(H3Index parent, int target_res) {
+    int parent_res = getResolution(parent);
+    if (target_res < parent_res) {
+        throw std::invalid_argument("target_res must be greater than or equal to parent cell resolution");
+    }
+    if (target_res > 15) {
+        throw std::invalid_argument("target_res must be <= 15");
+    }
+
+    // O(1) descendant test: fill the digits finer than parent_res with 7s,
+    // stamp the resolution field, compare with the parent index.
+    const uint64_t digit_mask = (1ULL << (3 * (15 - parent_res))) - 1;
+    const uint64_t res_field = 0xFULL << 52;
+    const uint64_t res_stamp = static_cast<uint64_t>(parent_res) << 52;
+    auto inside = [&](H3Index v) -> bool {
+        return (((v | digit_mask) & ~res_field) | res_stamp) == parent;
+    };
+
+    // Unordered distance-1 neighbors (safe near pentagons).
+    auto disk_neighbors = [](H3Index v, H3Index out[7]) -> int {
+        H3Index disk[7] = {0};
+        gridDisk(v, 1, disk);
+        int n = 0;
+        for (int i = 0; i < 7; ++i) {
+            if (disk[i] != 0 && disk[i] != v) out[n++] = disk[i];
+        }
+        return n;
+    };
+
+    auto probe_is_boundary = [&](H3Index v) -> bool {
+        if (!inside(v)) return false;
+        H3Index nbrs[7];
+        int n = disk_neighbors(v, nbrs);
+        for (int i = 0; i < n; ++i) {
+            if (!inside(nbrs[i])) return true;
+        }
+        return false;
+    };
+
+    // Start: snap a parent vertex to target_res, BFS the few steps to the wall.
+    CellBoundary cb;
+    cellToBoundary(parent, &cb);
+    LatLng v0 = cb.verts[0];
+    H3Index seed = 0;
+    latLngToCell(&v0, target_res, &seed);
+
+    std::unordered_set<H3Index> seen{seed};
+    std::deque<H3Index> seek{seed};
+    H3Index start = 0;
+    while (!seek.empty()) {
+        H3Index v = seek.front();
+        seek.pop_front();
+        if (probe_is_boundary(v)) {
+            start = v;
+            break;
+        }
+        H3Index nbrs[7];
+        int n = disk_neighbors(v, nbrs);
+        for (int i = 0; i < n; ++i) {
+            if (seen.insert(nbrs[i]).second) seek.push_back(nbrs[i]);
+        }
+    }
+
+    // Flood along the wall. The k=1 ring is rotationally ordered, so an
+    // inside neighbor consecutive to an outside neighbor shares an edge with
+    // that outside cell and is boundary by construction — one ring call per
+    // boundary cell. Pentagon-distorted rings fall back to probing.
+    std::unordered_set<H3Index> result{start};
+    std::vector<H3Index> stack{start};
+    while (!stack.empty()) {
+        H3Index v = stack.back();
+        stack.pop_back();
+        H3Index ring[6] = {0};
+        bool ordered = (gridRingUnsafe(v, 1, ring) == E_SUCCESS);
+        if (ordered) {
+            for (int i = 0; i < 6; ++i) {
+                if (ring[i] == 0) { ordered = false; break; }
+            }
+        }
+        if (ordered) {
+            bool ins[6];
+            for (int i = 0; i < 6; ++i) ins[i] = inside(ring[i]);
+            for (int i = 0; i < 6; ++i) {
+                if (ins[i] && (!ins[(i + 5) % 6] || !ins[(i + 1) % 6])
+                        && result.insert(ring[i]).second) {
+                    stack.push_back(ring[i]);
+                }
+            }
+        } else {
+            H3Index nbrs[7];
+            int n = disk_neighbors(v, nbrs);
+            for (int i = 0; i < n; ++i) {
+                if (result.count(nbrs[i]) == 0 && probe_is_boundary(nbrs[i])) {
+                    result.insert(nbrs[i]);
+                    stack.push_back(nbrs[i]);
+                }
+            }
+        }
+    }
+
+    return std::vector<H3Index>(result.begin(), result.end());
 }
 
 /// Returns the cell's own boundary as a closed (lon, lat) ring in degrees.

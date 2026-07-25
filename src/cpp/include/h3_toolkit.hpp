@@ -40,6 +40,15 @@ std::vector<H3Index> children_on_boundary_faces(H3Index parent, int target_res, 
 H3Index cell_to_coarsest_ancestor_on_faces(H3Index h, const std::set<int>& input_faces = {1,2,3,4,5,6});
 
 /**
+ * Table-free alternative to children_on_boundary_faces (all-faces case) used
+ * for independent verification: finds one boundary cell near a parent vertex,
+ * then floods along the wall, certifying neighbors through a shared outside
+ * cell. Same result set as children_on_boundary_faces(parent, target_res),
+ * unordered.
+ */
+std::vector<H3Index> boundary_walk(H3Index parent, int target_res);
+
+/**
  * Returns the cell boundary as a vector of (lon, lat) pairs.
  */
 std::vector<std::pair<double, double>> cell_boundary(H3Index cell);

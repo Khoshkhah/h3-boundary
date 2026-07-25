@@ -80,6 +80,19 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
           nogil,
           "Returns all children at target_res that lie on parent's boundary faces.");
 
+    m.def("boundary_walk",
+          [](const std::string& parent_str, int target_res) {
+              auto cells = h3_toolkit::boundary_walk(string_to_h3(parent_str), target_res);
+              std::vector<std::string> result;
+              result.reserve(cells.size());
+              for (H3Index c : cells) result.push_back(h3_to_string(c));
+              return result;
+          },
+          py::arg("parent"), py::arg("target_res"),
+          nogil,
+          "Table-free boundary enumeration by wall-following (verification "
+          "algorithm; same set as children_on_boundary_faces, unordered).");
+
     m.def("cell_to_coarsest_ancestor_on_faces",
           [](const std::string& h_str, const std::set<int>& input_faces) {
               return h3_to_string(

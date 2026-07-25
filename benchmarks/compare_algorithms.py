@@ -236,6 +236,10 @@ def main():
         out, t = bench(lambda: boundary_walk_fast(parent, target), reps=3)
         rows.append(("walk-fast", out, t))
 
+        if table_cpp is not None and hasattr(table_cpp, "boundary_walk"):
+            out, t = bench(lambda: set(table_cpp.boundary_walk(parent, target)), reps=5)
+            rows.append(("walk-cpp", out, t))
+
         out, t = bench(lambda: boundary_ring_band(parent, target))
         rows.append(("ring-band", out, t))
 
