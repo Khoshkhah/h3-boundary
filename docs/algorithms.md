@@ -119,11 +119,11 @@ Measured on Linux / Python 3.14, generating the **full** boundary. `*-cpp` rows 
 |---|---|---|---|
 | 1. table-cpp | 0.02 ms | 0.88 ms | 5.7 ms |
 | 1. table-py | 0.16 ms | 4.0 ms | 41 ms |
-| 2. walk-cpp | 0.04 ms | 1.3 ms | — |
-| 2. walk-py | 0.92 ms | 20 ms | — |
+| 2. walk-cpp | 0.04 ms | 1.3 ms | 14 ms |
+| 2. walk-py | 0.92 ms | 20 ms | 200 ms |
 | 3. range-cpp | 0.04 ms | 0.55 ms | 5.6 ms |
 | 3. range-py | 0.46 ms | 8.4 ms | 69 ms |
-| 4. brute force | 7.7 ms | (minutes) | (hours) |
+| 4. brute force | 7.7 ms | 3,100 ms | ~150 s (extrapolated) |
 
 And the operations only approach 3 offers, where boundary size stops mattering:
 
@@ -132,11 +132,14 @@ And the operations only approach 3 offers, where boundary size stops mattering:
 | One cell at position *n* | 0.011 ms | 0.011 ms |
 | A 100-cell slice | 0.019 ms | 0.025 ms |
 
+All figures are measured except the last brute-force cell, which is extrapolated from its (linear in descendant count) cost at the smaller depths — running it takes about two and a half minutes.
+
 Reading the table:
 
 - **The C++ extension is worth ~8× on this work.** Without it everything still runs, just slower — the pure-Python column is the fallback path.
 - **`range-cpp` matches or beats `table-cpp`** because it generates child indexes arithmetically rather than calling into H3 per node.
 - **The walk's gap is constants, not complexity.** Same asymptotics; it computes at runtime what the tables precomputed.
+- **Brute force is in a different class.** It scales with the parent's area, so it grows 7× per level while the others grow ~3×: by res 2→11 it is 27,000× slower than the traversal.
 - **Random access is flat.** 0.011 ms whether the boundary has 6 thousand cells or half a million — that is the O(depth) behavior.
 
 ---
