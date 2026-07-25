@@ -22,6 +22,9 @@ HEX_RES0 = next(c for c in h3.get_res0_cells() if not h3.is_pentagon(c))
 HEX_RES1 = next(c for c in h3.cell_to_children(HEX_RES0, 1) if not h3.is_pentagon(c))
 PENT_RES0 = sorted(h3.get_pentagons(0))[0]
 PENT_RES1 = sorted(h3.get_pentagons(1))[0]
+HEX_CHILD_OF_PENT = next(
+    c for c in h3.cell_to_children(PENT_RES0, 1) if not h3.is_pentagon(c)
+)
 HIGH_LAT_RES6 = h3.latlng_to_cell(75.0, 20.0, 6)  # Svalbard-ish
 ALL_FACES = {1, 2, 3, 4, 5, 6}
 
@@ -124,6 +127,28 @@ def test_children_below_parent_res_raises_both():
         cpp.children_on_boundary_faces(SF_RES6, 5)
 
 
+@pytest.mark.parametrize("depth", range(1, 6))
+@pytest.mark.parametrize("parent", [SF_RES6, HEX_RES1, HEX_CHILD_OF_PENT])
+def test_boundary_count_closed_form_hexagon(parent, depth):
+    """Pure combinatorics, independent of both implementations: the boundary
+    is a fractal of dimension 2*log_7(3), so cell counts triple per level.
+    For a hexagon parent B(d) = 3^(d+1) - 3."""
+    expected = 3 ** (depth + 1) - 3
+    target = h3.get_resolution(parent) + depth
+    assert len(py_utils.children_on_boundary_faces(parent, target)) == expected
+    assert len(cpp.children_on_boundary_faces(parent, target)) == expected
+
+
+@pytest.mark.parametrize("depth", range(1, 6))
+@pytest.mark.parametrize("parent", [PENT_RES0, PENT_RES1])
+def test_boundary_count_closed_form_pentagon(parent, depth):
+    """Pentagon parents: B(d) = 5*(3^d - 1)/2 (five corners, five edges)."""
+    expected = 5 * (3 ** depth - 1) // 2
+    target = h3.get_resolution(parent) + depth
+    assert len(py_utils.children_on_boundary_faces(parent, target)) == expected
+    assert len(cpp.children_on_boundary_faces(parent, target)) == expected
+
+
 @pytest.mark.parametrize("parent,target_res", [
     (SF_RES6, 9),
     (HEX_RES1, 4),
@@ -142,9 +167,6 @@ def test_boundary_walk_verifies_tables(parent, target_res):
 # trace functions
 # ---------------------------------------------------------------------------
 
-HEX_CHILD_OF_PENT = next(
-    c for c in h3.cell_to_children(PENT_RES0, 1) if not h3.is_pentagon(c)
-)
 TRACE_CELLS = [
     h3.latlng_to_cell(37.7759, -122.4180, 9),
     h3.latlng_to_cell(59.33, 18.06, 7),  # Stockholm
