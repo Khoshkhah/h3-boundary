@@ -28,21 +28,28 @@ pip install h3-boundary
 ```python
 import h3_boundary as h3b
 
-cell = '86283082fffffff'                              # resolution 6
+cell = '86283082fffffff'                     # a resolution-6 cell
 
-h3b.children_on_boundary_faces(cell, 10)              # the 240 edge cells, of 2,401 descendants
-h3b.boundary_cell_ids(cell, 10)                       # same, as a NumPy uint64 array
+h3b.children_on_boundary_faces(cell, 10)     # the 240 edge cells, of 2,401 descendants — hex strings
+h3b.boundary_cell_ids(cell, 10)              # the same cells as uint64, unordered — much faster
+h3b.boundary_cell_ids(cell, 10, sort=True)   # ...in the same order as the first call
 ```
 
-The count is `3**(depth+1) - 3`, so boundaries grow fast: that resolution-2 cell has 531,438 edge cells at resolution 13. You can take just the part you need, without building the rest:
+Boundaries grow fast — the count is `3**(depth+1) - 3` — so you can also take just the part you need, without building the rest:
 
 ```python
-h3b.boundary_cell_at(big, 13, 265_717)                # cell number n, in ~0.014 ms
-h3b.boundary_rank(big, some_cell)                     # the reverse: which n is it? (also a membership test)
-h3b.boundary_range(big, 13, 1000, 1100)               # cells 1000-1099 — a slice, or one worker's share
+import h3
+
+big   = h3.latlng_to_cell(37.7759, -122.4180, 2)   # a resolution-2 cell
+depth = 13 - 2                                     # tracing it at resolution 13
+total = 3 ** (depth + 1) - 3                       # 531,438 edge cells — no computation needed
+
+middle = h3b.boundary_cell_at(big, 13, total // 2) # cell number 265,719, computed directly
+h3b.boundary_rank(big, middle)                     # back to 265,719 — also a membership test
+h3b.boundary_range(big, 13, 0, 100)                # the first 100 — a slice, or one worker's share
 ```
 
-Each of these costs the same whether the boundary holds 78 cells or half a million.
+Each of those costs the same whether the boundary holds 78 cells or half a million.
 
 ### 2. What shape is the boundary?
 
