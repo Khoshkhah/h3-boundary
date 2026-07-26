@@ -39,6 +39,51 @@ How far is "far enough"? Measure it. For a resolution-6 cell, the furthest a des
 
 ---
 
+## Why buffer at all, if you already traced the boundary?
+
+A fair objection: the accurate function computes every boundary child anyway, so the buffer saves no work at that step. What does it add?
+
+**A traced boundary has an expiry date.** Trace at resolution 9 and you get a shape that is right *for resolution-9 cells*. Look deeper and the wobble grows past it:
+
+| Descendants at | Outside the exact res-9 boundary | Outside the same boundary, buffered |
+|---|---|---|
+| res 10 | 189 | **0** |
+| res 11 | 384 | **0** |
+| res 12 | 1,484 | **0** |
+
+The buffer removes the expiry. One edge length of margin and the shape holds for resolution 10, 12, 15 — any depth, permanently.
+
+**That is the saving, and it is large.** Without a buffer, the only way to be safe for resolution-15 data is to trace all the way to resolution 15:
+
+| Approach | Cells to trace | Valid for |
+|---|---|---|
+| trace at res 9, then buffer | **78** | every depth |
+| trace at res 15, no buffer | **59,046** | every depth |
+
+Same guarantee, 757× less work. The buffer is not buying you a shortcut past the boundary children — it is buying you a shortcut past the *depth* of them.
+
+### Buffering is not simplification
+
+Worth stating plainly, because the two are easy to conflate: buffering **adds** vertices. It rounds off every corner with a small arc, so the outline gets heavier, not lighter.
+
+| Traced at | Exact | After buffering |
+|---|---|---|
+| res 8 | 55 verts | 369 |
+| res 10 | 487 verts | 3,033 |
+| res 12 | 4,375 verts | 27,009 |
+
+Three independent dials, then:
+
+| Dial | Controls |
+|---|---|
+| `intermediate_res` | accuracy *and* vertex count — lower is coarser and lighter |
+| `buffer_meters` | validity at unlimited depth — the safety margin |
+| `use_convex_hull` | speed, paid for in extra area |
+
+They compose. Tracing at res 8 *and* buffering gives a 369-point polygon that still contains every res-15 descendant — light, rough, and safe.
+
+---
+
 ## Which one should I use?
 
 | If you want… | Use | Contains everything? |
