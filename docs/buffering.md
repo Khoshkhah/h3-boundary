@@ -165,6 +165,8 @@ Cost grows with the boundary, so coarse parents traced finely are expensive:
 | 5 | 6,558 | 673 ms |
 | 4 | 19,680 | 2,425 ms |
 
+Merging is the expensive part, and which merge engine runs matters enormously: H3's own union scales roughly cubically, so `cell_boundary_from_children` switches to Boost.Geometry past ~1,000 cells. On a 19,680-cell boundary that is 29 s against 0.35 s, for an identical polygon.
+
 `intermediate_res` is the dial: higher hugs the true shape more closely and shrinks the auto-margin, but there are more cells to merge. The default of 10 suits parents around resolution 5–7; for coarser parents, raise it — or use the hull.
 
 ---

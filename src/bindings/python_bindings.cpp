@@ -184,6 +184,18 @@ PYBIND11_MODULE(_h3_boundary_cpp, m) {
           nogil,
           "Returns merged boundary polygon of all boundary children.");
 
+    m.def("merged_boundary_of_cells",
+          [](const std::vector<std::string>& cell_strs) {
+              std::vector<H3Index> cells;
+              cells.reserve(cell_strs.size());
+              for (const auto& s : cell_strs) cells.push_back(string_to_h3(s));
+              return h3_toolkit::merged_boundary_of_cells(cells);
+          },
+          py::arg("cells"),
+          nogil,
+          "Unions the given cells and returns the exterior ring of the largest "
+          "resulting polygon as (lon, lat) pairs.");
+
     m.def("cell_boundary_from_children_with_count",
           [](const std::string& parent_str, int target_res) {
               H3Index parent = string_to_h3(parent_str);

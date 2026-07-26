@@ -33,6 +33,22 @@ def _get_children_on_boundary_faces():
         from .utils import children_on_boundary_faces
         return children_on_boundary_faces
 
+
+# Above this many cells, Boost's pairwise merge beats H3's own union, which
+# turns out to be roughly cubic in cell count: 726 cells merge in 5 ms, 6,558
+# in 3.3 s, 19,680 in 29 s, against 9 ms / 99 ms / 346 ms for the C++ path.
+# Below the threshold H3's union wins on call overhead, so we switch rather
+# than always preferring one.
+_CPP_UNION_THRESHOLD = 1000
+
+
+def _get_cpp_merge():
+    try:
+        from ._h3_boundary_cpp import merged_boundary_of_cells
+        return merged_boundary_of_cells
+    except ImportError:
+        return None
+
 def cell_boundary_to_geojson(h: str) -> Dict[str, Any]:
     """
     Returns the cell's own boundary as a GeoJSON Feature.
@@ -109,26 +125,47 @@ def cell_boundary_from_children(parent: str, target_res: int) -> Dict[str, Any]:
     """
     Returns the geometric boundary (GeoJSON Polygon) of a parent cell,
     computed as the union of its boundary children at `target_res`.
-    
-    Uses H3's native cells_to_h3shape for efficient polygon creation.
-    
+
+    Merges with H3's native cells_to_h3shape for small boundaries and with
+    Boost.Geometry (when the extension is built) for large ones — H3's union
+    scales roughly cubically, so past a thousand or so cells the C++ path is
+    orders of magnitude faster for an identical result.
+
     Args:
         parent: H3 cell index
         target_res: Resolution for boundary children (must be > parent resolution)
-    
+
     Returns:
         GeoJSON Feature with the merged boundary polygon
     """
     # Get children_on_boundary_faces (C++ or Python)
     children_on_boundary_faces = _get_children_on_boundary_faces()
-    
+
     # Get all boundary children
     boundary_children = children_on_boundary_faces(parent, target_res)
-    
+
     if not boundary_children:
         # Fallback to parent boundary if no children found
         return cell_boundary_to_geojson(parent)
-    
+
+    # Large boundary: hand the merge to Boost rather than H3's union.
+    if len(boundary_children) >= _CPP_UNION_THRESHOLD:
+        cpp_merge = _get_cpp_merge()
+        if cpp_merge is not None:
+            coords = cpp_merge(list(boundary_children))
+            if coords:
+                geojson_coords = [[c[0], c[1]] for c in coords]
+                if geojson_coords[0] != geojson_coords[-1]:
+                    geojson_coords.append(geojson_coords[0])
+                return geojson.Feature(
+                    geometry=geojson.Polygon([geojson_coords]),
+                    properties={
+                        "h3_index": parent,
+                        "child_resolution": target_res,
+                        "num_boundary_cells": len(boundary_children),
+                    },
+                )
+
     # Use H3's native function - MUCH faster than Shapely unary_union
     try:
         h3_shape = h3.cells_to_h3shape(boundary_children)
