@@ -26,14 +26,18 @@ pip install h3-boundary
 
 ### The cells along the edge
 
+Every call takes **two resolutions**: the cell you start from, and the finer resolution you want the answer in. A resolution-6 cell contains 2,401 cells at resolution 10 — of which 240 lie on its edge.
+
 ```python
 import h3_boundary as h3b
 
-cell = "86283082fffffff"                    # a resolution-6 cell
+cell = "86283082fffffff"                              # a resolution-6 cell
 
-edge = h3b.children_on_boundary_faces(cell, 10)
-len(edge)                                   # 240, out of 2,401 descendants
+edge = h3b.children_on_boundary_faces(cell, target_res=10)
+len(edge)                                             # 240 resolution-10 cells
 ```
+
+Ask for a finer `target_res` and you get a finer tracing of the same edge: resolution 12 gives 2,184 cells, resolution 15 gives 59,046. The count is always `3**(target_res - cell_res + 1) - 3`.
 
 For large boundaries, `boundary_cell_ids` returns the same cells as a NumPy `uint64` array — far faster, since it skips building a hex string per cell. It is unordered by default; pass `sort=True` for traversal order.
 
@@ -44,12 +48,12 @@ You do not have to build a boundary to use it. Any single cell is computable dir
 ```python
 import h3
 
-big = h3.latlng_to_cell(37.7759, -122.4180, 2)
-total = 3 ** (13 - 2 + 1) - 3               # 531,438 — the size is a closed form
+big = h3.latlng_to_cell(37.7759, -122.4180, 2)       # a resolution-2 cell
+total = 3 ** (13 - 2 + 1) - 3                        # 531,438 edge cells at resolution 13
 
-middle = h3b.boundary_cell_at(big, 13, total // 2)   # the middle cell, computed directly
-h3b.boundary_rank(big, middle)                       # the inverse — and a membership test
-h3b.boundary_range(big, 13, 0, 100)                  # the first hundred, for streaming or sharding
+middle = h3b.boundary_cell_at(big, target_res=13, n=total // 2)   # the middle one, computed directly
+h3b.boundary_rank(big, middle)                                    # the inverse — and a membership test
+h3b.boundary_range(big, target_res=13, start=0, stop=100)         # the first hundred, to stream or shard
 ```
 
 Disjoint ranges reassemble into exactly the full traversal, so workers can split a boundary with no coordination.
@@ -57,7 +61,7 @@ Disjoint ranges reassemble into exactly the full traversal, so workers can split
 ### The boundary as a polygon
 
 ```python
-h3b.cell_boundary_from_children(cell, 10)   # GeoJSON Feature — the real outline
+h3b.cell_boundary_from_children(cell, target_res=10)   # GeoJSON Feature — the real outline
 ```
 
 ### A polygon that contains everything

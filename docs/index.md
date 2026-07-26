@@ -29,15 +29,19 @@ pip install h3-boundary
 
 ### 1. Which cells are on the boundary?
 
+Every call takes **two resolutions**: the cell you start from, and the finer resolution you want the answer in.
+
 ```python
 import h3_boundary as h3b
 
-cell = '86283082fffffff'                    # resolution 6
+cell = '86283082fffffff'                                 # a resolution-6 cell
 
-h3b.children_on_boundary_faces(cell, 10)    # the 240 edge cells, of 2,401 descendants
-h3b.boundary_cell_ids(cell, 10)             # the same cells as uint64, unordered — much faster
-h3b.boundary_cell_ids(cell, 10, sort=True)  # ...in the same order as the first call
+h3b.children_on_boundary_faces(cell, target_res=10)      # its 240 edge cells at resolution 10
+h3b.boundary_cell_ids(cell, target_res=10)               # the same cells as uint64, unordered — faster
+h3b.boundary_cell_ids(cell, target_res=10, sort=True)    # ...in the same order as the first call
 ```
+
+A finer `target_res` traces the same edge more finely: resolution 12 gives 2,184 cells, resolution 15 gives 59,046. The count is always `3**(target_res - cell_res + 1) - 3`.
 
 Boundaries grow fast — a resolution-2 cell has 531,438 of them at resolution 13 — so you can also take only the part you need:
 
@@ -47,9 +51,9 @@ import h3
 big   = h3.latlng_to_cell(37.7759, -122.4180, 2)   # a resolution-2 cell
 total = 3 ** (13 - 2 + 1) - 3                      # 531,438 edge cells — a closed form
 
-middle = h3b.boundary_cell_at(big, 13, total // 2) # the middle cell, computed directly
-h3b.boundary_rank(big, middle)                     # the inverse — also a membership test
-h3b.boundary_range(big, 13, 0, 100)                # the first hundred — a slice, or a worker's share
+middle = h3b.boundary_cell_at(big, target_res=13, n=total // 2)  # the middle one, computed directly
+h3b.boundary_rank(big, middle)                                   # the inverse — also a membership test
+h3b.boundary_range(big, target_res=13, start=0, stop=100)        # the first hundred — a slice or shard
 ```
 
 → [Boundary Algorithms](algorithms.md) compares the ways of computing these; [Boundary Indexing](indexing.md) explains how a single cell is reached directly.
@@ -57,7 +61,7 @@ h3b.boundary_range(big, 13, 0, 100)                # the first hundred — a sli
 ### 2. What shape is the boundary?
 
 ```python
-h3b.cell_boundary_from_children(cell, 10)   # GeoJSON polygon of the real outline
+h3b.cell_boundary_from_children(cell, target_res=10)   # GeoJSON polygon of the real outline
 ```
 
 This is not H3's own hexagon for the cell. The small cells straddle that hexagon rather than tiling it, so the two shapes differ by **13% of their area**.
