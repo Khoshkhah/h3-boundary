@@ -1,6 +1,6 @@
-# Contributing to H3-Toolkit
+# Contributing to H3-Boundary
 
-Thank you for your interest in contributing to H3-Toolkit! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to H3-Boundary! This document provides guidelines and instructions for contributing.
 
 ## Getting Started
 
@@ -8,14 +8,14 @@ Thank you for your interest in contributing to H3-Toolkit! This document provide
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Khoshkhah/h3-toolkit.git
-   cd h3-toolkit
+   git clone https://github.com/Khoshkhah/h3-boundary.git
+   cd h3-boundary
    ```
 
 2. **Create a development environment**
    ```bash
-   conda create -n h3-toolkit-dev python=3.11
-   conda activate h3-toolkit-dev
+   conda create -n h3-boundary-dev python=3.11
+   conda activate h3-boundary-dev
    conda install -c conda-forge boost-cpp cmake
    pip install -e ".[dev]"
    ```
@@ -36,7 +36,7 @@ Thank you for your interest in contributing to H3-Toolkit! This document provide
 ## Code Structure
 
 ```
-h3-toolkit/
+h3-boundary/
 ├── src/
 │   ├── cpp/                    # C++ implementation
 │   │   ├── include/h3_toolkit.hpp
@@ -134,7 +134,7 @@ for name, func in [('Python', function_python), ('C++', function_cpp)]:
 
 When reporting issues, please include:
 
-1. **H3-Toolkit version** (`h3_boundary.__version__`)
+1. **H3-Boundary version** (`h3_boundary.__version__`)
 2. **Python version** (`python --version`)
 3. **Operating system**
 4. **Minimal reproducible example**

@@ -33,7 +33,7 @@ def benchmark_cpp(cell_res0, target_res):
 
 def main():
     print("=" * 60)
-    print("H3-Toolkit Backend Benchmark")
+    print("H3-Boundary Backend Benchmark")
     print("=" * 60)
     print()
     

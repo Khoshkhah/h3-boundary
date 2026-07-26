@@ -41,10 +41,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Khoshkhah/h3-toolkit"
-Documentation = "https://khoshkhah.github.io/h3-toolkit/"
-Repository = "https://github.com/Khoshkhah/h3-toolkit"
-Issues = "https://github.com/Khoshkhah/h3-toolkit/issues"
+Homepage = "https://github.com/Khoshkhah/h3-boundary"
+Documentation = "https://khoshkhah.github.io/h3-boundary/"
+Repository = "https://github.com/Khoshkhah/h3-boundary"
+Issues = "https://github.com/Khoshkhah/h3-boundary/issues"
 
 [tool.setuptools.packages.find]
 where = ["src/python"]

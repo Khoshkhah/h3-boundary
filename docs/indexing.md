@@ -300,7 +300,7 @@ Five things this shows:
 4. **Even for ordered output, bulk is the faster route** — expand in bulk and sort (7.1 ms) rather than descend cell by cell (13.3 ms). The recursion is only needed when you want a *slice* rather than everything.
 5. **Parallelism pays only for the biggest boundaries.** Below ~100k cells, thread hand-off costs more than the work saved. At 531k it gives 6× on the ordered path (13.3 → 2.2 ms) and 1.6× on bulk (2.0 → 1.2 ms). NumPy gains nothing from threads (it holds the GIL for the bookkeeping between array ops) and needs processes to parallelize at all — the C++ functions release the GIL, so plain threads work.
 
-Reproduce with `python benchmarks/compare_implementations.py`, or work through it interactively in [`notebook/boundary_indexing_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/boundary_indexing_demo.ipynb) — which also samples 300 cells from a 531,438-cell boundary without generating the rest.
+Reproduce with `python benchmarks/compare_implementations.py`, or work through it interactively in [`notebook/boundary_indexing_demo.ipynb`](https://github.com/Khoshkhah/h3-boundary/blob/master/notebook/boundary_indexing_demo.ipynb) — which also samples 300 cells from a 531,438-cell boundary without generating the rest.
 
 ### How each one is parallelized
 

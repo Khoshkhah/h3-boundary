@@ -4,18 +4,18 @@ title: Home
 nav_order: 1
 ---
 
-# h3-boundary
+# H3-Boundary
 {: .no_toc }
 
 Boundary cells and boundary polygons for Uber's H3 grid.
 {: .fs-6 .fw-300 }
 
 [Quick start](#quick-start){: .btn .btn-primary .mr-2 }
-[View on GitHub](https://github.com/Khoshkhah/h3-toolkit){: .btn }
+[View on GitHub](https://github.com/Khoshkhah/h3-boundary){: .btn }
 
 ---
 
-An H3 cell at one resolution contains thousands — or billions — of cells at finer resolutions. h3-boundary works with the ones **on its edge**: it lists them, traces their outline, and builds polygons that safely contain them. Cost scales with the boundary, never with the interior.
+An H3 cell at one resolution contains thousands — or billions — of cells at finer resolutions. H3-Boundary works with the ones **on its edge**: it lists them, traces their outline, and builds polygons that safely contain them. Cost scales with the boundary, never with the interior.
 
 ![A resolution-5 H3 cell traced at resolution 8: its 78 boundary cells highlighted, its 265 interior cells greyed out](assets/boundary_children.png)
 
@@ -33,7 +33,7 @@ Every function takes two resolutions: the cell you start from, and the finer `ta
 import h3
 import h3_boundary as h3b
 
-cell = h3.latlng_to_cell(37.7759, -122.4180, 6)          # a resolution-6 cell
+cell = h3.latlng_to_cell(37.7759, -122.4180, 6)          # a resolution-6 cell over San Francisco
 
 # 1. Its boundary cells — descendants at resolution 10 that lie on its edge
 edge = h3b.children_on_boundary_faces(cell, target_res=10)
@@ -53,7 +53,7 @@ Why the third one exists: the plain hexagon H3 draws for a cell is **not** where
 Interiors explode; boundaries stay manageable. A resolution-2 cell has close to two billion descendants at resolution 13, but its boundary there holds only `3**(13 - 2 + 1) - 3` = 531,438 cells — and you never need to build even those to use them:
 
 ```python
-big = h3.latlng_to_cell(37.7759, -122.4180, 2)
+big = h3.latlng_to_cell(37.7759, -122.4180, 2)           # the same spot, at resolution 2
 total = 3 ** (13 - 2 + 1) - 3                            # boundary size is a closed form
 
 ids = h3b.boundary_cell_ids(big, target_res=13)          # all of them, as a uint64 array, in ~4 ms
@@ -96,13 +96,13 @@ Measured on Linux / Python 3.14; the C++ extension is used automatically when pr
 
 ## Notebooks
 
-Three runnable demos live in [`notebook/`](https://github.com/Khoshkhah/h3-toolkit/tree/master/notebook) — clone the repo and open them with `jupyter notebook`:
+Three runnable demos live in [`notebook/`](https://github.com/Khoshkhah/h3-boundary/tree/master/notebook) — clone the repo and open them with `jupyter notebook`:
 
 | Notebook | What it shows |
 |---|---|
-| [`demo_generation.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/demo_generation.ipynb) | Boundary tracing and buffering step by step, each stage drawn on a map |
-| [`boundary_indexing_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/boundary_indexing_demo.ipynb) | Large boundaries: bulk ids, reaching one cell directly, sharding |
-| [`buffered_polygon_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/buffered_polygon_demo.ipynb) | The three buffering modes compared, with a containment check for each |
+| [`demo_generation.ipynb`](https://github.com/Khoshkhah/h3-boundary/blob/master/notebook/demo_generation.ipynb) | Boundary tracing and buffering step by step, each stage drawn on a map |
+| [`boundary_indexing_demo.ipynb`](https://github.com/Khoshkhah/h3-boundary/blob/master/notebook/boundary_indexing_demo.ipynb) | Large boundaries: bulk ids, reaching one cell directly, sharding |
+| [`buffered_polygon_demo.ipynb`](https://github.com/Khoshkhah/h3-boundary/blob/master/notebook/buffered_polygon_demo.ipynb) | The three buffering modes compared, with a containment check for each |
 
 ## Installation
 
@@ -117,4 +117,4 @@ h3_boundary.cpp_geom_available() # True if the C++ geometry functions exist
 
 ## License
 
-MIT — see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE).
+MIT — see [LICENSE](https://github.com/Khoshkhah/h3-boundary/blob/master/LICENSE).

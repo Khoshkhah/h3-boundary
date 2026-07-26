@@ -1,4 +1,4 @@
-name: h3-toolkit
+name: h3-boundary
 channels:
   - conda-forge
   - defaults

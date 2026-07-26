@@ -4,9 +4,9 @@ title: API Reference
 nav_order: 3
 ---
 
-# h3-boundary API Reference
+# H3-Boundary API Reference
 
-Complete API documentation for h3-boundary.
+Complete API documentation for H3-Boundary.
 
 ## Table of Contents
 

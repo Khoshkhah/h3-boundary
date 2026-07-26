@@ -1,12 +1,12 @@
 remote_theme: just-the-docs/just-the-docs
-title: H3-Toolkit
+title: H3-Boundary
 description: High-performance H3 cell boundary tracing and polygon operations
 
 # Navigation
 nav_enabled: true
 
 # Footer
-footer_content: "Copyright &copy; 2024 H3-Toolkit Contributors. MIT License."
+footer_content: "Copyright &copy; 2024 H3-Boundary Contributors. MIT License."
 
 # Color scheme
 color_scheme: light
@@ -20,7 +20,7 @@ search:
 # Aux links (GitHub button in header)
 aux_links:
   "GitHub":
-    - "https://github.com/Khoshkhah/h3-toolkit"
+    - "https://github.com/Khoshkhah/h3-boundary"
 aux_links_new_tab: true
 
 # Exclude from processing
