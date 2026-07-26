@@ -1,111 +1,89 @@
 # h3-boundary
 
-**Trace the boundary of an H3 cell — the cells along its edge, the polygon they form, and a polygon guaranteed to contain them.**
+**Boundary cells and boundary polygons for Uber's H3 grid.**
 
 [![PyPI](https://img.shields.io/pypi/v/h3-boundary.svg)](https://pypi.org/project/h3-boundary/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+An H3 cell at one resolution contains thousands — or billions — of cells at finer resolutions. h3-boundary works with the ones **on its edge**: it lists them, traces their outline, and builds polygons that safely contain them. Cost scales with the boundary, never with the interior.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/Khoshkhah/h3-toolkit/master/docs/assets/boundary_children.png"
-       alt="A resolution-5 H3 cell with its 78 boundary children at resolution 8 highlighted, and its 265 interior children greyed out"
+       alt="A resolution-5 H3 cell traced at resolution 8: its 78 boundary cells highlighted, its 265 interior cells greyed out"
        width="720">
 </p>
+
+<p align="center"><em>A resolution-5 cell traced at resolution 8: 78 boundary cells computed, 265 interior cells never generated.</em></p>
 
 ```bash
 pip install h3-boundary
 ```
 
-## Why
+## Quick start
 
-**Finding a cell's edge cells is expensive the obvious way.** A resolution-2 cell has close to two billion descendants at resolution 13, and only 531,438 of them lie on its edge. Generating everything to filter for the edge is hopeless; h3-boundary walks only the edge itself.
-
-**The hexagon H3 draws for a cell is not its true footprint.** Children straddle that hexagon instead of tiling it — the two shapes differ by 13% of their area. Filter fine-grained data with the hexagon and you silently drop cells along the edge: 1,278 out of 16,807 in the example above. h3-boundary gives you shapes you can filter with safely.
-
-## Usage
-
-### The cells along the edge
-
-Every call takes **two resolutions**: the cell you start from, and the finer resolution you want the answer in. A resolution-6 cell contains 2,401 cells at resolution 10 — of which 240 lie on its edge.
-
-```python
-import h3_boundary as h3b
-
-cell = "86283082fffffff"                              # a resolution-6 cell
-
-edge = h3b.children_on_boundary_faces(cell, target_res=10)
-len(edge)                                             # 240 resolution-10 cells
-```
-
-Ask for a finer `target_res` and you get a finer tracing of the same edge: resolution 12 gives 2,184 cells, resolution 15 gives 59,046. The count is always `3**(target_res - cell_res + 1) - 3`.
-
-For large boundaries, `boundary_cell_ids` returns the same cells as a NumPy `uint64` array — far faster, since it skips building a hex string per cell. It is unordered by default; pass `sort=True` for traversal order.
-
-### Reaching into a huge boundary
-
-You do not have to build a boundary to use it. Any single cell is computable directly, in about 14 microseconds, no matter how large the boundary is.
+Every function takes two resolutions: the cell you start from, and the finer `target_res` you want the answer in.
 
 ```python
 import h3
+import h3_boundary as h3b
 
-big = h3.latlng_to_cell(37.7759, -122.4180, 2)       # a resolution-2 cell
-total = 3 ** (13 - 2 + 1) - 3                        # 531,438 edge cells at resolution 13
+cell = h3.latlng_to_cell(37.7759, -122.4180, 6)          # a resolution-6 cell
 
-middle = h3b.boundary_cell_at(big, target_res=13, n=total // 2)   # the middle one, computed directly
-h3b.boundary_rank(big, middle)                                    # the inverse — and a membership test
-h3b.boundary_range(big, target_res=13, start=0, stop=100)         # the first hundred, to stream or shard
+# 1. Its boundary cells — descendants at resolution 10 that lie on its edge
+edge = h3b.children_on_boundary_faces(cell, target_res=10)
+len(edge)                                                # 240, out of 2,401 descendants
+
+# 2. Its true outline, as a GeoJSON Feature
+outline = h3b.cell_boundary_from_children(cell, target_res=10)
+
+# 3. A polygon guaranteed to contain every descendant — the one to filter with
+safe = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 ```
 
-Disjoint ranges reassemble into exactly the full traversal, so workers can split a boundary with no coordination.
+Why the third one exists: the plain hexagon H3 draws for a cell is **not** where its descendants sit — they straddle it, as the figure above shows. Filter fine-resolution data with that hexagon and you silently lose the cells along the edge (about 7% of them). The buffered polygon cannot lose any, at any resolution.
 
-### The boundary as a polygon
+## Working at scale
+
+Interiors explode; boundaries stay manageable. A resolution-2 cell has close to two billion descendants at resolution 13, but its boundary there holds only `3**(13 - 2 + 1) - 3` = 531,438 cells — and you never need to build even those to use them:
 
 ```python
-h3b.cell_boundary_from_children(cell, target_res=10)   # GeoJSON Feature — the real outline
+big = h3.latlng_to_cell(37.7759, -122.4180, 2)
+total = 3 ** (13 - 2 + 1) - 3                            # boundary size is a closed form
+
+ids = h3b.boundary_cell_ids(big, target_res=13)          # all of them, as a uint64 array, in ~4 ms
+mid = h3b.boundary_cell_at(big, target_res=13, n=total // 2)   # any single one, in microseconds
+h3b.boundary_rank(big, mid)                              # the inverse — also a membership test
+h3b.boundary_range(big, target_res=13, start=0, stop=100)      # any slice — stream it, or shard it
 ```
 
-### A polygon that contains everything
+Disjoint slices reassemble into exactly the full boundary, so parallel workers need no coordination.
 
-```python
-h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
-```
+## Output formats
 
-This is the one to filter with: it is guaranteed to contain every descendant of the cell, at any resolution. A convex-hull mode trades a little extra area for roughly 20× the speed.
+- **Cells**: hex strings (`children_on_boundary_faces`) or NumPy `uint64` arrays (`boundary_cell_ids`) — ready for h3-py, dataframes, or database joins.
+- **Polygons**: GeoJSON Features — ready for folium, Leaflet, or PostGIS.
+
+The package ships as a source distribution: it compiles a C++ extension during install when a toolchain is available (`cmake`, C++17, Boost headers) and falls back to pure Python otherwise. Same results either way, verified by a parity test suite.
 
 ## Documentation
 
-Guides, benchmarks and the full API: **[khoshkhah.github.io/h3-toolkit](https://khoshkhah.github.io/h3-toolkit/)**
+**[khoshkhah.github.io/h3-toolkit](https://khoshkhah.github.io/h3-toolkit/)** — concepts, algorithm comparisons, benchmarks, and the full API.
 
-Three runnable notebooks live in [`notebook/`](https://github.com/Khoshkhah/h3-toolkit/tree/master/notebook) — boundary tracing on a map, working with half-million-cell boundaries, and the buffering modes compared.
+Three runnable notebooks live in [`notebook/`](https://github.com/Khoshkhah/h3-toolkit/tree/master/notebook): boundary tracing on a map, working with half-million-cell boundaries, and the buffering modes compared.
 
-## Installation details
-
-The package ships as a source distribution. During install it compiles a C++ extension if `cmake`, a C++17 compiler and the Boost headers are available; otherwise it installs pure-Python and every function still works, just more slowly.
-
-```python
-import h3_boundary
-
-h3_boundary.get_backend()         # 'cpp' or 'python'
-h3_boundary.cpp_geom_available()  # True if the C++ geometry functions are present
-```
-
-Development install:
+## Development
 
 ```bash
 git clone https://github.com/Khoshkhah/h3-toolkit.git
 cd h3-toolkit
 conda env create -f environment.yml && conda activate h3-toolkit
 pip install -e .
-
-pytest tests/python -v            # includes C++/Python parity tests
+pytest tests/python -v
 ```
 
-## Contributing
-
-Issues and pull requests are welcome — see [CONTRIBUTING.md](https://github.com/Khoshkhah/h3-toolkit/blob/master/CONTRIBUTING.md).
+Contributions welcome — see [CONTRIBUTING.md](https://github.com/Khoshkhah/h3-toolkit/blob/master/CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE).
-
-Built on [Uber H3](https://h3geo.org/), [Boost.Geometry](https://www.boost.org/doc/libs/release/libs/geometry/) and [pybind11](https://github.com/pybind/pybind11).
+MIT — see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE). Built on [Uber H3](https://h3geo.org/), [Boost.Geometry](https://www.boost.org/doc/libs/release/libs/geometry/) and [pybind11](https://github.com/pybind/pybind11).
