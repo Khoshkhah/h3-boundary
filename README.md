@@ -17,6 +17,8 @@ A big H3 cell contains a lot of small ones. This library gives you the ones **on
 pip install h3-boundary
 ```
 
+📖 **Full documentation, guides and benchmarks: [khoshkhah.github.io/h3-toolkit](https://khoshkhah.github.io/h3-toolkit/)**
+
 ---
 
 ## The three things it does
@@ -58,23 +60,6 @@ Use this to **filter**. Test fine-resolution data against a cell's plain hexagon
 
 ---
 
-## Performance
-
-Resolution-6 cell, Linux, Python 3.14. The C++ extension is used automatically when present.
-
-| | Cells | Time |
-|---|---|---|
-| Boundary cells — `children_on_boundary_faces` | 240 | 0.02 ms |
-| Boundary cells, large — `boundary_cell_ids` | 531,438 | 4 ms |
-| One cell by index — `boundary_cell_at` | — | 0.014 ms |
-| Boundary polygon — `cell_boundary_from_children` | 240 | 1.6 ms |
-| Buffered polygon, accurate | 240 | 6 ms |
-| Buffered polygon, convex hull | 240 | 0.4 ms |
-
-`boundary_cell_at` costs the same whether the boundary holds 78 cells or half a million — it computes the answer directly instead of counting to it.
-
----
-
 ## Installation notes
 
 The package ships as a source distribution. On install it compiles a C++ extension if `cmake`, a C++17 compiler and the Boost headers are present; if not, it installs pure-Python and everything still works, just slower.
@@ -91,28 +76,6 @@ git clone https://github.com/Khoshkhah/h3-toolkit.git
 cd h3-toolkit
 conda env create -f environment.yml && conda activate h3-toolkit
 pip install -e .
-```
-
----
-
-## Documentation
-
-Full docs: **[khoshkhah.github.io/h3-toolkit](https://khoshkhah.github.io/h3-toolkit/)**
-
-| Page | What's in it |
-|---|---|
-| [Concepts](https://khoshkhah.github.io/h3-toolkit/concepts.html) | How boundary tracing works |
-| [Boundary Algorithms](https://khoshkhah.github.io/h3-toolkit/algorithms.html) | Four ways to compute boundary cells, compared |
-| [Boundary Indexing](https://khoshkhah.github.io/h3-toolkit/indexing.html) | How the n-th cell is computed directly |
-| [Buffered Polygons](https://khoshkhah.github.io/h3-toolkit/buffering.html) | Why buffering is needed, and what each mode guarantees |
-| [API Reference](https://khoshkhah.github.io/h3-toolkit/api_reference.html) | Every function |
-
-Runnable demos:
-
-```bash
-jupyter notebook notebook/demo_generation.ipynb        # tracing and buffering, on a map
-jupyter notebook notebook/boundary_indexing_demo.ipynb # large boundaries: ids, indexing, sharding
-jupyter notebook notebook/buffered_polygon_demo.ipynb  # the buffering modes compared
 ```
 
 ---

@@ -195,4 +195,4 @@ Pass `buffer_meters` to override, or `0` to skip buffering and get the merged bo
 
 - `tests/python/test_buffering.py` tests containment directly: every vertex of every descendant must fall inside, at four latitudes, for the union and hull modes alike. It also pins the two surprises on this page — that `get_buffered_h3_polygon` does *not* contain them, and that a buffered boundary need not cover the drawn hexagon — so neither can silently change.
 - Both backends must return the same polygon — `tests/python/test_parity.py` compares them by symmetric-difference area, and checks validity and ring closure.
-- `notebook/buffered_polygon_demo.ipynb` reproduces the containment table and the map above; `docs/generate_buffering_figure.py` regenerates the figure.
+- [`notebook/buffered_polygon_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/buffered_polygon_demo.ipynb) reproduces the containment table and the map above; `docs/generate_buffering_figure.py` regenerates the figure.

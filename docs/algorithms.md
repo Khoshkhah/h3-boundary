@@ -198,7 +198,7 @@ The lookup tables are the one thing everything else rests on, so they are checke
 
 Plus brute force as ground truth on small cases, and `rank(unrank(n)) == n` round-trips for the indexing functions. A wrong table entry would have to fool all of them simultaneously.
 
-The comparison in this page is reproducible:
+See it on a map in [`notebook/demo_generation.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/demo_generation.ipynb). The comparison in this page is reproducible:
 
 ```bash
 PYTHONPATH=src/python python benchmarks/compare_algorithms.py

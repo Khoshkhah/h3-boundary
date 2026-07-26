@@ -96,6 +96,16 @@ Resolution-6 cell, Linux, Python 3.14. The C++ extension is used automatically w
 | [Buffered Polygons](buffering.md) | Why buffering is needed, and what each mode guarantees |
 | [API Reference](api_reference.md) | Every function |
 
+## Notebooks
+
+Three runnable demos live in [`notebook/`](https://github.com/Khoshkhah/h3-toolkit/tree/master/notebook) — clone the repo and open them with `jupyter notebook`:
+
+| Notebook | What it shows |
+|---|---|
+| [`demo_generation.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/demo_generation.ipynb) | Boundary tracing and buffering step by step, each stage drawn on a map |
+| [`boundary_indexing_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/boundary_indexing_demo.ipynb) | Large boundaries: bulk ids, reaching one cell directly, sharding — and 300 cells sampled from a 531,438-cell boundary without generating the rest |
+| [`buffered_polygon_demo.ipynb`](https://github.com/Khoshkhah/h3-toolkit/blob/master/notebook/buffered_polygon_demo.ipynb) | The three buffering modes compared, with a containment check for each |
+
 ## Installation
 
 Ships as a source distribution. On install it compiles a C++ extension if `cmake`, a C++17 compiler and the Boost headers are present; otherwise it installs pure-Python and everything still works, just slower.
