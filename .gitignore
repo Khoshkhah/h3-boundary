@@ -91,3 +91,7 @@ _deps/
 # Conda
 *.conda
 site/
+
+# personal working notes for Claude Code — not project documentation
+CLAUDE.md
+CLAUDE.local.md
