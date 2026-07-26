@@ -40,14 +40,17 @@ cell = h3.latlng_to_cell(lat=37.7759, lng=-122.4180, res=6)
 edge = h3b.children_on_boundary_faces(cell, target_res=10)
 len(edge)                                                # 240, out of 2,401 descendants
 
-# 2. Its true outline, as a GeoJSON Feature
+# 2. Its exact outline — the shape those descendants actually fill
 outline = h3b.cell_boundary_from_children(cell, target_res=10)
 
-# 3. A polygon guaranteed to contain every descendant — the one to filter with
+# 3. That same outline, grown by a safety margin
 safe = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
+safe["properties"]["buffer_meters"]                      # 75.9 — the margin added
 ```
 
-Why the third one exists: the plain hexagon H3 draws for a cell is **not** where its descendants sit — they straddle it, as the figure above shows. Filter fine-resolution data with that hexagon and you silently lose the cells along the edge (about 7% of them). The buffered polygon cannot lose any, at any resolution. [Buffered Polygons](buffering.md) has the full story.
+Both polygons are GeoJSON Features, and both trace the boundary at resolution 10 — the difference is what they are for. The **outline** is the exact shape: draw it. On its own it is not safe to filter with, because cells finer than resolution 10 still poke slightly past it; **safe** pushes the edges out by one resolution-10 edge length (75.9 m), after which nothing can fall outside at *any* resolution. That is also why its parameter is called `intermediate_res` — there, tracing is only an intermediate step.
+
+Why not just use the hexagon H3 draws for the cell? Because that hexagon is **not** where the descendants sit — they straddle it, as the figure above shows. Filtering fine-resolution data with it silently loses the cells along the edge (about 7% of them). [Buffered Polygons](buffering.md) has the full story.
 
 ## Working at scale
 
