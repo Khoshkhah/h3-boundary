@@ -4,97 +4,107 @@ title: Home
 nav_order: 1
 ---
 
-# h3-boundary Documentation
+# h3-boundary
+{: .no_toc }
 
-H3 cell boundary tracing and buffered polygons across resolution hierarchies, with optional C++ acceleration.
+Work with the boundary of an H3 cell: which cells are on it, what shape it is, and how to contain it safely.
+{: .fs-6 .fw-300 }
 
-## Quick Links
+[Get started](#the-three-things-it-does){: .btn .btn-primary .mr-2 }
+[View on GitHub](https://github.com/Khoshkhah/h3-toolkit){: .btn }
 
-- [Interactive Demo](demo.html)
-- [API Reference](api_reference.md)
-- [Concepts](concepts.md)
-- [Boundary Algorithms](algorithms.md) — the four approaches, compared
-- [Boundary Indexing](indexing.md) — compute the n-th boundary cell directly
-- [Buffered Polygons](buffering.md) — one polygon that contains a cell and all its descendants
-- [GitHub Repository](https://github.com/Khoshkhah/h3-toolkit)
+---
 
-## Overview
-
-h3-boundary extends Uber's H3 library with efficient algorithms for computing cell boundaries across resolution hierarchies and generating buffered polygons.
+A big H3 cell contains a lot of small ones. This library gives you the ones **on its edge** — without generating the millions inside.
 
 ![A resolution-5 H3 cell with its 78 boundary children at resolution 8 highlighted, and its 265 interior children greyed out](assets/boundary_children.png)
-
-### Key Features
-
-**Boundary-only traversal**
-- Enumerate boundary children without materializing the parent's interior
-- Cost scales with the perimeter, not the area
-
-**Dual backend**
-- Pure Python (Shapely) everywhere; pybind11/Boost.Geometry C++ extension compiled automatically when a toolchain is available
-- Identical results, enforced by a parity test suite (including pentagons)
-- GeoJSON-compatible output
-
-## Installation
 
 ```bash
 pip install h3-boundary
 ```
 
-The C++ extension compiles automatically when `cmake`, a C++17 compiler, and the Boost headers are available; otherwise the package installs pure-Python. For development:
+---
 
-```bash
-git clone https://github.com/Khoshkhah/h3-toolkit.git
-cd h3-toolkit
-conda env create -f environment.yml
-conda activate h3-toolkit
-pip install -e .
-```
+## The three things it does
 
-## Quick Start
+### 1. Which cells are on the boundary?
 
 ```python
 import h3_boundary as h3b
 
-cell = '86283082fffffff'  # Resolution 6 cell
+cell = '86283082fffffff'                    # resolution 6
 
-# Get boundary children
-children = h3b.children_on_boundary_faces(cell, 10)
-print(f"Found {len(children)} boundary children")
-
-# …or as a NumPy uint64 array — much faster for large boundaries
-ids = h3b.boundary_cell_ids(cell, 10)                # unordered
-ids = h3b.boundary_cell_ids(cell, 10, sort=True)     # traversal order
-
-# Reach one cell directly, without generating the rest (O(depth))
-h3b.boundary_cell_at(cell, 10, 100)
-
-# Buffered polygon guaranteed to contain all res-15 children
-result = h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
-
-# Returns GeoJSON Feature
-print(result['properties']['buffer_meters'])
+h3b.children_on_boundary_faces(cell, 10)    # 240 cells (not the 2.8M inside)
+h3b.boundary_cell_ids(cell, 10)             # same, as a NumPy uint64 array
 ```
+
+Boundaries grow fast — a resolution-2 cell has 531,438 of them at resolution 13 — so you can also take only the part you need:
+
+```python
+h3b.boundary_cell_at(big, 13, 265_717)      # the n-th cell, in ~0.014 ms
+h3b.boundary_rank(big, some_cell)           # its position — also a membership test
+h3b.boundary_range(big, 13, 1000, 1100)     # a slice, or one worker's share
+```
+
+→ [Boundary Algorithms](algorithms.md) compares the ways of computing these; [Boundary Indexing](indexing.md) explains how a single cell is reached directly.
+
+### 2. What shape is the boundary?
+
+```python
+h3b.cell_boundary_from_children(cell, 10)   # GeoJSON polygon of the real outline
+```
+
+Not the same as H3's own hexagon for that cell — the hexagon is 13% off the true shape, because the small cells straddle it.
+
+### 3. A shape that safely contains everything?
+
+```python
+h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
+```
+
+Use this to **filter**. Test fine-resolution data against a cell's plain hexagon and you silently lose ~7% of it along the edges; this polygon contains every descendant, at any resolution.
+
+→ [Buffered Polygons](buffering.md) explains why, and what each mode guarantees.
+
+---
 
 ## Performance
 
-| Function | Python | C++ |
-|----------|--------|-----|
-| `children_on_boundary_faces` | 0.14ms | 0.02ms |
-| `cell_boundary_from_children` | 1.3ms | 2.5ms |
-| `get_buffered_boundary_polygon` (accurate) | 5.9ms | 7.0ms |
-| `get_buffered_boundary_polygon` (fast hull) | — | 0.4ms |
+Resolution-6 cell, Linux, Python 3.14. The C++ extension is used automatically when present.
 
-Resolution-6 cell, intermediate resolution 10. See the [API Reference](api_reference.md) for details.
+| | Cells | Time |
+|---|---|---|
+| Boundary cells — `children_on_boundary_faces` | 240 | 0.02 ms |
+| Boundary cells, large — `boundary_cell_ids` | 531,438 | 4 ms |
+| One cell by index — `boundary_cell_at` | — | 0.014 ms |
+| Boundary polygon — `cell_boundary_from_children` | 240 | 1.6 ms |
+| Buffered polygon, accurate | 240 | 6 ms |
+| Buffered polygon, convex hull | 240 | 0.4 ms |
+
+`boundary_cell_at` costs the same whether the boundary holds 78 cells or half a million.
+
+---
 
 ## Documentation
 
-- [API Reference](api_reference.md) - Complete function reference
-- [Concepts](concepts.md) - How boundary tracing works
-- [Boundary Algorithms](algorithms.md) - Four approaches introduced and benchmarked
-- [Boundary Indexing](indexing.md) - Direct access to the n-th boundary cell, explained from scratch
-- [Buffered Polygons](buffering.md) - The three buffering functions and what each guarantees
+| Page | What's in it |
+|---|---|
+| [Interactive Demo](demo.html) | Boundary tracing and buffering, on a map |
+| [Concepts](concepts.md) | How boundary tracing works |
+| [Boundary Algorithms](algorithms.md) | Four ways to compute boundary cells, compared |
+| [Boundary Indexing](indexing.md) | How the n-th cell is computed directly |
+| [Buffered Polygons](buffering.md) | Why buffering is needed, and what each mode guarantees |
+| [API Reference](api_reference.md) | Every function |
+
+## Installation
+
+Ships as a source distribution. On install it compiles a C++ extension if `cmake`, a C++17 compiler and the Boost headers are present; otherwise it installs pure-Python and everything still works, just slower.
+
+```python
+h3_boundary.get_backend()        # 'cpp' or 'python'
+h3_boundary.cpp_geom_available() # True if the C++ geometry functions exist
+```
 
 ## License
 
-MIT License - see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE)
+MIT — see [LICENSE](https://github.com/Khoshkhah/h3-toolkit/blob/master/LICENSE).
