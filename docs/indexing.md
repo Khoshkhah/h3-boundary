@@ -1,21 +1,6 @@
----
-layout: default
-title: Boundary Indexing
-nav_order: 6
----
-
 # Boundary Indexing
-{: .no_toc }
 
 How to compute the *n*-th boundary cell directly — no searching, no enumeration — and how to go back the other way.
-{: .fs-6 .fw-300 }
-
-<details open markdown="block">
-  <summary>Table of contents</summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
 ---
 

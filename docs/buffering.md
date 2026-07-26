@@ -1,21 +1,6 @@
----
-layout: default
-title: Buffered Polygons
-nav_order: 7
----
-
 # Buffered Polygons
-{: .no_toc }
 
 One polygon that provably contains a cell and every descendant it will ever have — three ways to build one, and what each is worth.
-{: .fs-6 .fw-300 }
-
-<details open markdown="block">
-  <summary>Table of contents</summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
 ---
 

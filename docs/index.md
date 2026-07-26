@@ -1,17 +1,9 @@
----
-layout: default
-title: Home
-nav_order: 1
----
-
 # H3-Boundary
-{: .no_toc }
 
 Boundary cells and boundary polygons for Uber's H3 grid.
-{: .fs-6 .fw-300 }
 
-[Quick start](#quick-start){: .btn .btn-primary .mr-2 }
-[View on GitHub](https://github.com/Khoshkhah/h3-boundary){: .btn }
+[Quick start](#quick-start){ .md-button .md-button--primary }
+[View on GitHub](https://github.com/Khoshkhah/h3-boundary){ .md-button }
 
 ---
 
@@ -94,7 +86,7 @@ Measured on Linux / Python 3.14; the C++ extension is used automatically when pr
 
 | Page | What's in it |
 |---|---|
-| [Interactive Demo](demo.html) | Boundary tracing and buffering, on a map |
+| [Interactive Demo](demo.md) | Boundary tracing and buffering, on a map |
 | [Concepts](concepts.md) | How boundary tracing works |
 | [Boundary Algorithms](algorithms.md) | Four ways to compute boundary cells, compared |
 | [Boundary Indexing](indexing.md) | How the n-th boundary cell is computed directly |

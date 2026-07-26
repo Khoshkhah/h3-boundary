@@ -1,21 +1,6 @@
----
-layout: default
-title: Boundary Algorithms
-nav_order: 5
----
-
 # Boundary Algorithms
-{: .no_toc }
 
 Four ways to compute the boundary children of an H3 cell — what each one does, when to use it, and how they compare.
-{: .fs-6 .fw-300 }
-
-<details open markdown="block">
-  <summary>Table of contents</summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
 ---
 

@@ -1,0 +1,59 @@
+site_name: H3-Boundary
+site_description: Boundary cells and boundary polygons for Uber's H3 grid
+site_url: https://khoshkhah.github.io/h3-boundary/
+repo_url: https://github.com/Khoshkhah/h3-boundary
+repo_name: Khoshkhah/h3-boundary
+
+# Keep the URLs the Jekyll site used (…/algorithms.html), so links in the
+# README, the PyPI page and anywhere else never break.
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Interactive Demo: demo.md
+  - Concepts: concepts.md
+  - Boundary Algorithms: algorithms.md
+  - Boundary Indexing: indexing.md
+  - Buffered Polygons: buffering.md
+  - API Reference: api_reference.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
