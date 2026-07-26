@@ -49,16 +49,19 @@ Why not just use the hexagon H3 draws for the cell? Because that hexagon is **no
 
 ## Working at scale
 
-Interiors explode; boundaries stay manageable. A resolution-2 cell has close to two billion descendants at resolution 13, but its boundary there holds only `3**(13 - 2 + 1) - 3` = 531,438 cells — and you never need to build even those to use them:
+Interiors explode; boundaries stay manageable. Boundary size has a closed form — `3**(depth + 1) - 3`, where `depth` is how many resolution levels you descend — so it is known before computing anything. A resolution-2 cell has close to two billion descendants at resolution 13, but only 531,438 of them lie on its boundary, and you never need to build even those to use them:
 
 ```python
-big = h3.latlng_to_cell(lat=37.7759, lng=-122.4180, res=2)   # a country-sized cell (~87,000 km²)
-total = 3 ** (13 - 2 + 1) - 3                                # boundary size is a closed form
+res, target = 2, 13                          # a country-sized cell, traced with ~44 m² cells
+big = h3.latlng_to_cell(lat=37.7759, lng=-122.4180, res=res)
 
-ids = h3b.boundary_cell_ids(big, target_res=13)          # all of them, as a uint64 array, in ~4 ms
-mid = h3b.boundary_cell_at(big, target_res=13, n=total // 2)   # any single one, in microseconds
-h3b.boundary_rank(big, mid)                              # the inverse — also a membership test
-h3b.boundary_range(big, target_res=13, start=0, stop=100)      # any slice — stream it, or shard it
+depth = target - res                         # 11 levels of subdivision between the two
+total = 3 ** (depth + 1) - 3                 # 531,438 boundary cells, known without counting
+
+ids = h3b.boundary_cell_ids(big, target_res=target)               # all of them, uint64, ~4 ms
+mid = h3b.boundary_cell_at(big, target_res=target, n=total // 2)  # any one, in microseconds
+h3b.boundary_rank(big, mid)                                       # the inverse — also a membership test
+h3b.boundary_range(big, target_res=target, start=0, stop=100)     # any slice — stream it, or shard it
 ```
 
 Disjoint slices reassemble into exactly the full boundary, so parallel workers need no coordination.
