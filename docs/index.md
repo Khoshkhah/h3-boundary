@@ -15,7 +15,7 @@ Work with the boundary of an H3 cell: which cells are on it, what shape it is, a
 
 ---
 
-A big H3 cell contains a lot of small ones. This library gives you the ones **on its edge** — without generating the millions inside.
+A big H3 cell contains a lot of small ones — a resolution-2 cell has close to two billion descendants at resolution 13. This library gives you the ones **on its edge** (531,438 of them, here) without generating the rest.
 
 ![A resolution-5 H3 cell with its 78 boundary children at resolution 8 highlighted, and its 265 interior children greyed out](assets/boundary_children.png)
 
@@ -34,16 +34,22 @@ import h3_boundary as h3b
 
 cell = '86283082fffffff'                    # resolution 6
 
-h3b.children_on_boundary_faces(cell, 10)    # 240 cells (not the 2.8M inside)
-h3b.boundary_cell_ids(cell, 10)             # same, as a NumPy uint64 array
+h3b.children_on_boundary_faces(cell, 10)    # the 240 edge cells, of 2,401 descendants
+h3b.boundary_cell_ids(cell, 10)             # the same cells as uint64, unordered — much faster
+h3b.boundary_cell_ids(cell, 10, sort=True)  # ...in the same order as the first call
 ```
 
 Boundaries grow fast — a resolution-2 cell has 531,438 of them at resolution 13 — so you can also take only the part you need:
 
 ```python
-h3b.boundary_cell_at(big, 13, 265_717)      # the n-th cell, in ~0.014 ms
-h3b.boundary_rank(big, some_cell)           # its position — also a membership test
-h3b.boundary_range(big, 13, 1000, 1100)     # a slice, or one worker's share
+import h3
+
+big   = h3.latlng_to_cell(37.7759, -122.4180, 2)   # a resolution-2 cell
+total = 3 ** (13 - 2 + 1) - 3                      # 531,438 edge cells — a closed form
+
+middle = h3b.boundary_cell_at(big, 13, total // 2) # the middle cell, computed directly
+h3b.boundary_rank(big, middle)                     # the inverse — also a membership test
+h3b.boundary_range(big, 13, 0, 100)                # the first hundred — a slice, or a worker's share
 ```
 
 → [Boundary Algorithms](algorithms.md) compares the ways of computing these; [Boundary Indexing](indexing.md) explains how a single cell is reached directly.
@@ -54,7 +60,7 @@ h3b.boundary_range(big, 13, 1000, 1100)     # a slice, or one worker's share
 h3b.cell_boundary_from_children(cell, 10)   # GeoJSON polygon of the real outline
 ```
 
-Not the same as H3's own hexagon for that cell — the hexagon is 13% off the true shape, because the small cells straddle it.
+This is not H3's own hexagon for the cell. The small cells straddle that hexagon rather than tiling it, so the two shapes differ by **13% of their area**.
 
 ### 3. A shape that safely contains everything?
 
@@ -62,7 +68,7 @@ Not the same as H3's own hexagon for that cell — the hexagon is 13% off the tr
 h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 ```
 
-Use this to **filter**. Test fine-resolution data against a cell's plain hexagon and you silently lose ~7% of it along the edges; this polygon contains every descendant, at any resolution.
+Use this to **filter**. Because of that straddle, testing fine-resolution data against the plain hexagon silently drops the cells on the edge — **1,278 of 16,807** at resolution 11, about 7.6%. This polygon contains every descendant, at any resolution.
 
 → [Buffered Polygons](buffering.md) explains why, and what each mode guarantees.
 
@@ -111,6 +117,8 @@ Three runnable demos live in [`notebook/`](https://github.com/Khoshkhah/h3-toolk
 Ships as a source distribution. On install it compiles a C++ extension if `cmake`, a C++17 compiler and the Boost headers are present; otherwise it installs pure-Python and everything still works, just slower.
 
 ```python
+import h3_boundary
+
 h3_boundary.get_backend()        # 'cpp' or 'python'
 h3_boundary.cpp_geom_available() # True if the C++ geometry functions exist
 ```
