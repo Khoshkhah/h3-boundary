@@ -27,15 +27,16 @@ pip install h3-boundary
 
 ## Quick start
 
-Every function takes two resolutions: the cell you start from, and the finer `target_res` you want the answer in.
+Start from any H3 cell. Here we index downtown San Francisco at resolution 6 — a district-sized cell of about 36 km² — using `latlng_to_cell` from [h3-py](https://uber.github.io/h3-py/), which H3-Boundary already depends on.
 
 ```python
 import h3
 import h3_boundary as h3b
 
-cell = h3.latlng_to_cell(37.7759, -122.4180, 6)          # a resolution-6 cell over San Francisco
+cell = h3.latlng_to_cell(lat=37.7759, lng=-122.4180, res=6)
 
-# 1. Its boundary cells — descendants at resolution 10 that lie on its edge
+# 1. Its boundary cells: the descendants at resolution 10 (block-sized cells)
+#    that lie on its edge
 edge = h3b.children_on_boundary_faces(cell, target_res=10)
 len(edge)                                                # 240, out of 2,401 descendants
 
@@ -53,8 +54,8 @@ Why the third one exists: the plain hexagon H3 draws for a cell is **not** where
 Interiors explode; boundaries stay manageable. A resolution-2 cell has close to two billion descendants at resolution 13, but its boundary there holds only `3**(13 - 2 + 1) - 3` = 531,438 cells — and you never need to build even those to use them:
 
 ```python
-big = h3.latlng_to_cell(37.7759, -122.4180, 2)           # the same spot, at resolution 2
-total = 3 ** (13 - 2 + 1) - 3                            # boundary size is a closed form
+big = h3.latlng_to_cell(lat=37.7759, lng=-122.4180, res=2)   # a country-sized cell (~87,000 km²)
+total = 3 ** (13 - 2 + 1) - 3                                # boundary size is a closed form
 
 ids = h3b.boundary_cell_ids(big, target_res=13)          # all of them, as a uint64 array, in ~4 ms
 mid = h3b.boundary_cell_at(big, target_res=13, n=total // 2)   # any single one, in microseconds
