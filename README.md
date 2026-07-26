@@ -11,7 +11,7 @@
        width="720">
 </p>
 
-A big H3 cell contains a lot of small ones. This library gives you the ones **on its edge** — without generating the millions inside.
+A big H3 cell contains a lot of small ones — a resolution-2 cell has nearly 2 billion descendants at resolution 13. This library gives you the ones **on its edge** (531,438 of them, in this case) without generating the rest.
 
 ```bash
 pip install h3-boundary
@@ -30,17 +30,19 @@ import h3_boundary as h3b
 
 cell = '86283082fffffff'                              # resolution 6
 
-h3b.children_on_boundary_faces(cell, 10)              # 240 cells (not the 2.8M inside)
+h3b.children_on_boundary_faces(cell, 10)              # the 240 edge cells, of 2,401 descendants
 h3b.boundary_cell_ids(cell, 10)                       # same, as a NumPy uint64 array
 ```
 
-Boundaries get big — a resolution-2 cell has **531,438** of them at resolution 13. So you can also take just the part you need, without building the rest:
+The count is `3**(depth+1) - 3`, so boundaries grow fast: that resolution-2 cell has 531,438 edge cells at resolution 13. You can take just the part you need, without building the rest:
 
 ```python
-h3b.boundary_cell_at(big_cell, 13, 265_717)           # the n-th cell, in ~0.014 ms
-h3b.boundary_rank(big_cell, some_cell)                # its position — also a membership test
-h3b.boundary_range(big_cell, 13, 1000, 1100)          # a slice, or one worker's share
+h3b.boundary_cell_at(big, 13, 265_717)                # cell number n, in ~0.014 ms
+h3b.boundary_rank(big, some_cell)                     # the reverse: which n is it? (also a membership test)
+h3b.boundary_range(big, 13, 1000, 1100)               # cells 1000-1099 — a slice, or one worker's share
 ```
+
+Each of these costs the same whether the boundary holds 78 cells or half a million.
 
 ### 2. What shape is the boundary?
 
@@ -48,7 +50,7 @@ h3b.boundary_range(big_cell, 13, 1000, 1100)          # a slice, or one worker's
 h3b.cell_boundary_from_children(cell, 10)             # GeoJSON polygon of the real outline
 ```
 
-Not the same as H3's own hexagon for that cell — the hexagon is **13% off** the true shape, because the small cells straddle it.
+This is not H3's own hexagon for the cell. The small cells straddle that hexagon rather than tiling it, so the two shapes differ by **13% of their area**.
 
 ### 3. A shape that safely contains everything?
 
@@ -56,7 +58,7 @@ Not the same as H3's own hexagon for that cell — the hexagon is **13% off** th
 h3b.get_buffered_boundary_polygon(cell, intermediate_res=10)
 ```
 
-Use this to **filter**. Test fine-resolution data against a cell's plain hexagon and you silently lose ~7% of it along the edges; this polygon is guaranteed to contain every descendant, at any resolution.
+Use this to **filter**. Because of that straddle, testing fine-resolution data against the plain hexagon silently drops the cells on the edge — **1,278 of 16,807** at resolution 11, about 7.6%. This polygon is guaranteed to contain every descendant, at any resolution.
 
 ---
 
